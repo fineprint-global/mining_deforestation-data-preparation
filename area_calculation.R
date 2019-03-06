@@ -69,7 +69,6 @@ names(area_list) <- names(r_list)
 t1 <- proc.time()
 time_raster_area <- t1 - t0
 save(area_list, file = "./output/area_list.RData")
-load("./output/area_list.RData")
 
 # Calculate area using frequency and resolution
 rasterOptions(maxmemory = 1e+04)
@@ -85,9 +84,11 @@ freq_list <- parallel::mclapply(r_list, mc.cores = length(r_list), function(r){
 t1 <- proc.time()
 time_area_freq <- t1 - t0
 save(freq_list, file = "./output/freq_list.RData")
-load("./output/freq_list.RData")
+
 
 # Approximate surface area
+load("./output/freq_list.RData")
+load("./output/area_list.RData")
 area_list$r_wgs84_llat <- dplyr::transmute(area_list$r_wgs84_llat, Group = zone, Area = area, Region = "Low latitude", Method = "Approximate surface area")
 area_list$r_wgs84_hlat <- dplyr::transmute(area_list$r_wgs84_hlat, Group = zone, Area = area, Region = "High latitude", Method = "Approximate surface area")
 # Projected/simple area 
