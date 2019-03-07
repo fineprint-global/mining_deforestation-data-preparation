@@ -22,8 +22,7 @@ buffered_mines <- function(mines, buffersize){
   
   # Unproject mines
   mines_unprojected_buffer <- sf::st_transform(mines_projected_buffer, crs = "+proj=longlat")
-  
-  
+  sf::st_write(mines_unprojected_buffer, ("./output/buffered_mines.shp"))
 }
 
 # Call function
