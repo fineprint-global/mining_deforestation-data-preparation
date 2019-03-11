@@ -3,14 +3,20 @@ library(sf)
 library(raster)
 library(units)
 
-# Read mines und set buffersize in km
-mines <- sf::st_read("./input/snl_samples.shp")
-buffer <- units::set_units(20, km)
+# Set buffersize in km
+buffer <- units::set_units(100, km)
 
-# Function, which  returns unprojected buffered mine-polygons with original snl_ids
+# Get snl-data from geoserver
+fineprint_geoserver <- "http://fineprint:(allourdata)@fineprint.wu.ac.at:8080/geoserver/"
+snl_wfs_request <- "snl-2018/wfs?request=GetFeature&service=WFS&version=2.0.0&typeName=snl-2018:snl_metals&outputFormat=application/json"
+snl_mines_wfs <- stringr::str_glue(fineprint_geoserver, snl_wfs_request)
+snl_mines <- sf::st_read(snl_mines_wfs) %>% 
+  sf::st_transform(crs = sf::st_crs("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs"))
+
+# Function, which  returns unprojected buffered mine-polygons
 buffered_mines <- function(mines, buffersize){
   
-  mines_projected <- sf::st_transform(mines, crs = "+proj=robin")
+  mines_projected <- sf::st_transform(mines, crs = "+proj=igh")
   
   mines_projected_buffer <- sf::st_buffer(mines_projected, dist = buffer) %>%  
     sf::st_union() %>%  
@@ -18,11 +24,9 @@ buffered_mines <- function(mines, buffersize){
     sf::st_sf() %>% 
     dplyr::mutate(id_buffer = 1:n())
   
-  mines_projected_buffer <- st_join(mines_projected_buffer,mines_projected, join = st_intersects)
-  
   mines_unprojected_buffer <- sf::st_transform(mines_projected_buffer, crs = "+proj=longlat")
   mines_unprojected_buffer <- mines_unprojected_buffer %>%
-    dplyr::select(id_buffer, snl_id, geometry)
+    dplyr::select(id_buffer, geometry)
   
   sf::st_write(mines_unprojected_buffer, ("./output/buffered_mines.shp"))
 }
@@ -30,17 +34,8 @@ buffered_mines <- function(mines, buffersize){
 # Call function
 buffered_mines(mines, buffer)
 
-view(output_mines)
-#######################################################################
-# Buffer snl-dataset
 
-fineprint_geoserver <- "http://fineprint:(allourdata)@fineprint.wu.ac.at:8080/geoserver/"
-snl_wfs_request <- "snl-2018/wfs?request=GetFeature&service=WFS&version=2.0.0&typeName=snl-2018:snl_metals&outputFormat=application/json"
-snl_mines_wfs <- stringr::str_glue(fineprint_geoserver, snl_wfs_request)
-snl_mines <- sf::st_read(snl_mines_wfs) %>% 
-  sf::st_transform(crs = sf::st_crs("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs")) 
-
-buffered_mines(snl_mines, buffer)
+# intersection buffered mines and snl: mines_projected_buffer <- st_join(mines_projected_buffer,mines_projected, join = st_intersects)
 
 #######################################################################
 # Calculation of deforestation area by year for a sample dataset of mines
