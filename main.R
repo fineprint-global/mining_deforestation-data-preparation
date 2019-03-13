@@ -2,6 +2,8 @@ library(tidyverse)
 library(sf)
 library(raster)
 library(units)
+library(fineprintutils)
+
 
 # Set buffersize in km
 buffer <- units::set_units(100, km)
@@ -34,6 +36,10 @@ buffered_mines <- function(mines, buffersize){
 # Call function
 buffered_mines(mines, buffer)
 
+# Add protected areas to Geoserver
+?fineprintutils::gs_upload
+fineprintutils::gs_upload("C:/Users/istrauch/workspace/mining_deforestation/input/WDPA_Feb2019-shapefile/WDPA_Feb2019-shapefile-polygons.shp", 
+                          "unep-wcmc", "world-database-on-protected-areas", "2019-02", "v1")
 
 # intersection buffered mines and snl: mines_projected_buffer <- st_join(mines_projected_buffer,mines_projected, join = st_intersects)
 
