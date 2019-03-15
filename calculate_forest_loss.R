@@ -15,14 +15,16 @@ tiles_forest_loss <- dir("/mnt/nfs_fineprint/tmp/hansen_pixel_area", pattern = "
   dplyr::mutate(id_tile = stringr::str_match(year, "/Hansen_GFC-2017-v1.5_lossyear_(.*?).tif")[,2]) %>% 
   dplyr::mutate(id_tile = stringr::str_remove_all(id_tile, "_")) %>% 
   dplyr::mutate(geometry = sf::st_as_sfc(sf::st_bbox(r), sf::st_crs(r))) %>% 
-  sf::st_as_sf()
+  sf::st_as_sf() %>% 
+  dplyr::ungroup()
 
 # 1. Read/Load GTOPO30
 tiles_gtopo <- dir("/mnt/nfs_fineprint/tmp/GTOPO30", pattern = ".tif$", full.name = TRUE) %>% 
   tibble::tibble(dem = .) %>% 
   dplyr::rowwise() %>% 
   dplyr::mutate(id_tile = stringr::str_match(dem, "/gt30(.*?).tif")[,2]) %>% 
-  dplyr::mutate(id_tile = stringr::str_to_upper(id_tile)) 
+  dplyr::mutate(id_tile = stringr::str_to_upper(id_tile)) %>% 
+  dplyr::ungroup()
 
 # 3. Read/Load ecoregions and protected areas
 sf_list = list(ecoregion = sf::read_sf("/mnt/nfs_fineprint/tmp/ecoregions/Ecoregions2017.shp") %>% 
@@ -31,17 +33,12 @@ sf_list = list(ecoregion = sf::read_sf("/mnt/nfs_fineprint/tmp/ecoregions/Ecoreg
                  dplyr::select(attr = STATUS_YR))
 
 # For each GTOPO30 tile calculate deforestation 
-tiles_forest_loss <- tiles_forest_loss %>% 
-  dplyr::filter(id_tile == "00N060W") %>% 
-  dplyr::ungroup()
-
 processing_log <- tiles_gtopo %>% 
-  dplyr::filter(id_tile == "W060N40") %>%
-  dplyr::mutate(log = list(purrr::map2(.x = dem,                 
-                                       .y = id_tile,
-                                       .f = process_hansen_parallel, 
-                                       sf_list = sf_list,
-                                       r_tbl = tiles_forest_loss,
-                                       output_path = "/mnt/nfs_fineprint/tmp/deforestation",
-                                       ncores = 8)))
+  dplyr::mutate(log = purrr::map2(.x = dem,                 
+                                 .y = id_tile,
+                                 .f = process_hansen_parallel, 
+                                 sf_list = sf_list,
+                                 r_tbl = tiles_forest_loss,
+                                 output_path = "/mnt/nfs_fineprint/tmp/deforestation",
+                                 ncores = 7))
 
