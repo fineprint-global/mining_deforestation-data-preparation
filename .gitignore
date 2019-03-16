@@ -28,3 +28,6 @@ rsconnect/
 mining_deforestation.Rproj
 input/
 output/
+*.log
+nohup*
+*.Rout
