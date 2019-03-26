@@ -19,7 +19,7 @@ process_hansen_parallel <- function(x, y, sf_list, r_tbl, output_path, ncores, l
     cat(paste0(capture.output(end_time - start_time), "\n"), file = log_file, append = TRUE)
   } else {
     start_time <- Sys.time()
-    cat(paste0("Creating grid", y, "at", sf_fpath, " "), file = log_file, append = TRUE)
+    cat(paste0("Creating grid ", y, " at ", sf_fpath, " "), file = log_file, append = TRUE)
     fname <- basename(x)
     tile_grid <- stars::read_stars(x) %>% 
       sf::st_as_sf(x, merge = FALSE, as_points = FALSE) %>% 
@@ -50,7 +50,6 @@ process_hansen_parallel <- function(x, y, sf_list, r_tbl, output_path, ncores, l
     
     # Process by block
     block_values <- parallel::mclapply(1:r_blocks$n, mc.cores = ncores, function(b){
-      gc(verbose = FALSE)
       cat(paste0("\nProcessing block ", b, "/", r_blocks$n,""), file = log_file, append = TRUE)
       
       # cat(paste0("\n\tChecking for overlapping grid cells ..."), file = log_file, append = TRUE)
@@ -100,13 +99,14 @@ process_hansen_parallel <- function(x, y, sf_list, r_tbl, output_path, ncores, l
       return(r_values)
       
     })
+    gc(verbose = FALSE)
     tile_fname <- paste0(output_path, "/", y, "_", tiles_subset$id_tile[tl], ".csv")
     readr::write_csv(dplyr::bind_rows(block_values), path = tile_fname, append = FALSE)
     end_time <- Sys.time()
-    cat(paste0("\nTile ", tl, " done! ", capture.output(end_time - start_time)), file = log_file, append = TRUE)
+    cat(paste0("\nTile ", tl, "/", length(tiles_subset$r), " done! ", capture.output(end_time - start_time)), file = log_file, append = TRUE)
     return(tile_fname)
   })
-  
+  gc(verbose = FALSE)
   return(grid_files)
   
 }
