@@ -31,3 +31,4 @@ output/
 *.log
 nohup*
 *.Rout
+aux.R

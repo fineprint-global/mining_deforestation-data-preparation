@@ -6,7 +6,7 @@ gtopo_dir <- "/mnt/nfs_fineprint/tmp/GTOPO30"
 pixel_area_dir <- "/mnt/nfs_fineprint/tmp/hansen_pixel_area"
 forest_loss_dir <- "/mnt/nfs_fineprint/tmp/hansen/lossyear"
 grid_output_path <- "/mnt/nfs_fineprint/tmp/grid_30sec"
-forest_loss_output_path <- "/mnt/nfs_fineprint/tmp/hansen/forest_loss_30sec"
+forest_loss_output_path <- "/mnt/nfs_fineprint/tmp/forest_loss_30sec"
 
 log_file <- date() %>% 
   stringr::str_replace_all(" ", "_") %>% 
