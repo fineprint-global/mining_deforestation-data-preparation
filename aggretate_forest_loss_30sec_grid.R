@@ -5,7 +5,10 @@ source("./R/aggregate_forest_loss_to_30sec_grid.R")
 gtopo_dir <- "/mnt/nfs_fineprint/tmp/GTOPO30"
 pixel_area_dir <- "/mnt/nfs_fineprint/tmp/hansen_pixel_area"
 forest_loss_dir <- "/mnt/nfs_fineprint/tmp/hansen/lossyear"
+treecover2000_dir <- "/mnt/nfs_fineprint/tmp/hansen/treecover2000"
 grid_output_path <- "/mnt/nfs_fineprint/tmp/grid_30sec"
+ecoregions_path <- "/mnt/nfs_fineprint/tmp/ecoregions/Ecoregions2017.shp"
+protected_area_path <- "/mnt/nfs_fineprint/tmp/protected_areas/WDPA_Feb2019-shapefile-polygons.shp"
 forest_loss_output_path <- "/mnt/nfs_fineprint/tmp/forest_loss_30sec"
 
 log_file <- date() %>% 
@@ -14,9 +17,9 @@ log_file <- date() %>%
   stringr::str_glue(".log") 
 
 # 1. Read/Load ecoregions and protected areas
-sf_list = list(ecoregion = sf::read_sf("/mnt/nfs_fineprint/tmp/ecoregions/Ecoregions2017.shp") %>% 
+sf_list = list(ecoregion = sf::read_sf(ecoregions_path) %>% 
                  dplyr::select(attr = ECO_ID), 
-               protected = sf::read_sf("/mnt/nfs_fineprint/tmp/protected_areas/WDPA_Feb2019-shapefile-polygons.shp") %>% 
+               protected = sf::read_sf(protected_area_path) %>% 
                  dplyr::select(attr = STATUS_YR))
 
 # 2. Read/load GTOPO30 tiles 
@@ -30,10 +33,11 @@ tiles_gtopo <- dir(gtopo_dir, pattern = ".tif$", full.name = TRUE) %>%
   sf::st_as_sf() %>% 
   dplyr::ungroup() 
 
-# 3. Read deforestation data 
+# 3. Read forest 2000 and forest loss 
 tiles_forest_loss <- dir(pixel_area_dir, pattern = ".tif$", full.name = TRUE) %>% 
   tibble::tibble(area = .) %>% 
   dplyr::mutate(year = paste0(forest_loss_dir, "/", basename(area))) %>% 
+  dplyr::mutate(treecover2000 = paste0(treecover2000_dir, "/", stringr::str_replace(string = basename(area), pattern = "lossyear", replacement = "treecover2000"))) %>% 
   dplyr::rowwise() %>% 
   dplyr::mutate(geometry = list(raster::stack(c(area = area)))) %>% 
   dplyr::mutate(id_hansen = stringr::str_match(year, "/Hansen_GFC-2017-v1.5_lossyear_(.*?).tif")[,2]) %>% 
@@ -60,8 +64,5 @@ tiles_aggregated_forest_loss <- tiles_forest_loss %>%
                                            log_file = log_file, 
                                            ncores = 12))
 
+dir.create("./output", showWarnings = FALSE, recursive = TRUE)
 sf::write_sf(tiles_aggregated_forest_loss, "./output/tiles_aggregated_forest_loss.gpkg")
-
-
-
-
