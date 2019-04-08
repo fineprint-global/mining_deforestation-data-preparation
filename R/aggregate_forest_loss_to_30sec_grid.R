@@ -44,8 +44,10 @@ aggregate_forest_loss_to_30sec_grid <- function(area, year, id_hansen, id_gtopo,
       sf::st_as_sf(x, merge = FALSE, as_points = FALSE) %>% 
       dplyr::rename(elevation = dem) %>% 
       tibble::rowid_to_column(var = "id") %>% 
-      dplyr::mutate(block_id = b) 
-
+      dplyr::mutate(id_grid = stringr::str_pad(string = id, width = 4, pad = "0")) %>% 
+      dplyr::mutate(id_grid = paste0(id_hansen, stringr::str_pad(string = r_blocks$row[b], width = 5, pad = "0"), "B", id_grid)) 
+    
+    
     if(nrow(sub_tile_grid) < 1){
       return(NULL)
     }
@@ -59,14 +61,16 @@ aggregate_forest_loss_to_30sec_grid <- function(area, year, id_hansen, id_gtopo,
     r_values <- velox_tile$extract(sp = sub_tile_grid, df = TRUE) %>% 
       tibble::as_tibble() %>% 
       dplyr::rename_all(list(~make.names(c("id", names(tile), names(sf_list))))) %>%
-      # dplyr::filter(!near(treecover2000, 0)) %>% 
-      dplyr::mutate(year = as.integer(year) + 2000, 
-                    ecoregion = as.integer(ecoregion),
-                    ecoregion = ifelse(is.na(ecoregion), 9999, ecoregion),          # Ecoregions NA to 9999
-                    protected = ifelse(as.integer(protected) <= year, TRUE, FALSE), # Check if deforestation happens after the status of protected
-                    protected = !is.na(protected),
-                    area = as.numeric(area) * (as.numeric(treecover2000) / 100)) %>% 
-      dplyr::group_by(id, year, ecoregion, protected) %>%
+      dplyr::filter(!near(treecover2000, 0)) %>% 
+      dplyr::left_join(sub_tile_grid, by = c("id" = "id")) %>%
+      dplyr::transmute(id_grid = as.character(id_grid),
+                       year = as.integer(year + 2000), 
+                       ecoregion = as.integer(ecoregion),
+                       ecoregion = ifelse(is.na(ecoregion), 9999, ecoregion),          # Ecoregions NA to 9999
+                       protected = ifelse(as.integer(protected) <= year, TRUE, FALSE), # Check if deforestation happens after the status of protected
+                       protected = !is.na(protected),
+                       area = as.numeric(area) * (as.numeric(treecover2000) / 100)) %>% 
+      dplyr::group_by(id_grid, year, ecoregion, protected) %>%
       dplyr::summarise(area = sum(area, na.rm = TRUE)) %>% 
       dplyr::ungroup()
     
@@ -75,15 +79,18 @@ aggregate_forest_loss_to_30sec_grid <- function(area, year, id_hansen, id_gtopo,
       dplyr::filter(year == 2000) %>% 
       dplyr::rename(area_2000 = area) %>% 
       dplyr::select(-year) %>% 
-      dplyr::right_join(r_values, by = c("id" = "id", "ecoregion" = "ecoregion", "protected" = "protected")) %>%  
-      dplyr::rename(area_loss = area) %>% 
-      dplyr::mutate(area_loss = ifelse(year == 2000, 0, area_loss)) %>% 
-      dplyr::group_by(id, ecoregion, protected) %>% 
-      dplyr::arrange(id, year, ecoregion, protected) %>% 
+      dplyr::right_join(r_values, by = c("id_grid" = "id_grid", "ecoregion" = "ecoregion", "protected" = "protected")) %>%  
+      dplyr::mutate(area_loss = ifelse(year == 2000, 0, area)) %>% 
+      dplyr::group_by(id_grid, ecoregion, protected) %>% 
+      dplyr::arrange(id_grid, year, ecoregion, protected) %>% 
       dplyr::mutate(accumulated_loss = cumsum(area_loss)) %>% 
       dplyr::mutate(area_forest = area_2000 - accumulated_loss) %>% 
-      dplyr::select(-area_2000) %>% 
-      dplyr::mutate(block_id = b)
+      dplyr::select(-area_2000, -area) %>% 
+      dplyr::ungroup() 
+    
+    # Replace id with global id_grid
+    sub_tile_grid <- sub_tile_grid %>% 
+      dplyr::select(id = id_grid, elevation)
 
     return(list(grid = sub_tile_grid, tbl = forest_loss_area))
     
@@ -97,30 +104,20 @@ aggregate_forest_loss_to_30sec_grid <- function(area, year, id_hansen, id_gtopo,
                          dbname = Sys.getenv("db_name"),
                          user = "postgres")
   
-  # clear grid table  --------------------------------------------------
+  # Insert grid to db  ------------------------------------------------------
+  ## DBI::dbSendQuery(conn = conn, statement = paste0("DELETE FROM forest;"))
   ## DBI::dbSendQuery(conn = conn, statement = paste0("DELETE FROM grid;"))
-  
-  do.call("rbind", lapply(block_values, function(x) x$geomtry)) %>% 
-    dplyr::mutate(id_gtopo, id_hansen) %>% 
-    dplyr::rename(id_grid = id, id_block = block_id) %>% 
+  do.call("rbind", lapply(block_values, function(x) x$grid)) %>% 
     sf::st_write(dsn = conn, layer = "grid", append = TRUE, factorsAsCharacter = TRUE)
-  
-  # TODO: Return id fk from database(query over id_gtopo, id_hansen)
-  fk_grid_id <- sf::st_read(dsn = conn, layer = "grid") %>% 
-    dplyr::filter(id_gtopo == id_gtopo, id_hansen == id_hansen)
-  
-  # JOIN BY id_block AND id_grid TO GET THE FK FOR FOREST TABLE 
-  dplyr::bind_rows(lapply(block_values, function(x) x$tbl))
-  fk_grid_id
-  
-  
-  # TODO: Insset data to forest table 
-  gc(verbose = FALSE)
-  tile_fname <- paste0(output_path, "/", id_gtopo, "_", id_hansen, ".csv")
-  readr::write_csv(dplyr::bind_rows(block_values), path = tile_fname, append = FALSE)
-  end_time <- Sys.time()
-  cat(paste0("\nTile ", id_hansen, " done! ", capture.output(end_time - start_time)), file = log_file, append = TRUE)
 
-  return(tile_fname)
+  # Insert forest data to db  -----------------------------------------------
+  db_status <- dplyr::bind_rows(lapply(block_values, function(x) x$tbl)) %>% 
+    DBI::dbWriteTable(conn = conn, name = "forest", append = TRUE, value = ., row.names = FALSE)
+  
+  # disconnect PostGIS database ---------------------------------------------
+  DBI::dbDisconnect(conn)
+  
+  cat(paste0("\nTile ", id_hansen, " done with DB insert ", db_status, " ", capture.output(Sys.time() - start_time)), file = log_file, append = TRUE)
+  return(db_status)
   
 }
