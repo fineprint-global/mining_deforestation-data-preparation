@@ -5,9 +5,6 @@ library(fasterize)
 library(RPostgreSQL)
 library(sf)
 
-# job_id <- 10
-job_id <- as.integer(Sys.getenv("JOB_ID"))
-
 source("./R/aggregate_forest_loss_to_30sec_grid.R")
 gtopo_dir <- path.expand("~/data/gtopo30")
 pixel_area_dir <- path.expand("~/data/hansen_pixel_area")
@@ -16,11 +13,6 @@ treecover2000_dir <- path.expand("~/data/hansen/treecover2000")
 ecoregions_path <- path.expand("~/data/ecoregions/Ecoregions2017.shp")
 protected_area_path <- path.expand("~/data/protected_areas/WDPA_Apr2019-shapefile-polygons.shp")
 forest_loss_output_path <- path.expand("~/data/forest_loss_30sec")
-
-log_file <- date() %>% 
-  stringr::str_replace_all(" ", "_") %>% 
-  str_replace_all(":", "") %>% 
-  stringr::str_glue(".log") 
 
 # 1. Read/Load ecoregions and protected areas
 sf_list = list(ecoregion = sf::read_sf(ecoregions_path) %>% 
@@ -57,6 +49,16 @@ tiles_forest_loss <- dir(pixel_area_dir, pattern = ".tif$", full.name = TRUE) %>
 #   stringr::str_replace_all(".csv", "") %>% 
 #   stringr::str_split("_") %>% 
 #   sapply(tail, n = 1)
+
+# Get job id 
+if(!exists("job_id"))
+  job_id <- seq_along(tiles_forest_loss$id_hansen)
+
+log_file <- date() %>% 
+  stringr::str_replace_all("  ", "_") %>% 
+  stringr::str_replace_all(" ", "_") %>% 
+  str_replace_all(":", "") %>% 
+  stringr::str_glue("job_id_", job_id, "_" ,.,".log") 
 
 # 5. Aggregate Hansens forest loss to 30 arc-sec grid 
 tiles_aggregated_forest_loss <- tiles_forest_loss %>% 
