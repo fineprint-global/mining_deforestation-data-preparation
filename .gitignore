@@ -32,3 +32,5 @@ output/
 nohup*
 *.Rout
 aux.R
+.Renviron
+.pgpass
