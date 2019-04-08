@@ -5,8 +5,8 @@ library(fasterize)
 library(RPostgreSQL)
 library(sf)
 
-# job_id <- "00N060W"
-job_id <- as.character(Sys.getenv("HANSEN_ID"))
+# job_id <- 10
+job_id <- as.integer(Sys.getenv("JOB_ID"))
 
 source("./R/aggregate_forest_loss_to_30sec_grid.R")
 gtopo_dir <- path.expand("~/data/gtopo30")
@@ -61,8 +61,7 @@ tiles_forest_loss <- dir(pixel_area_dir, pattern = ".tif$", full.name = TRUE) %>
 # 5. Aggregate Hansens forest loss to 30 arc-sec grid 
 tiles_aggregated_forest_loss <- tiles_forest_loss %>% 
   sf::st_join(y = tiles_gtopo, join = sf::st_covered_by, left = TRUE) %>%
-  dplyr::filter(id_hansen == job_id) %>% # Split jobs among WU cluster nodes 
-  # dplyr::filter(!id_hansen %in% tiles_done) %>% 
+  dplyr::filter(id_hansen == id_hansen[job_id]) %>% # Split jobs among WU cluster nodes 
   dplyr::mutate(out_file = purrr::pmap_chr(.l = list(area, year, id_hansen, id_gtopo, dem), 
                                            .f = aggregate_forest_loss_to_30sec_grid,
                                            sf_list = sf_list, 
