@@ -1,20 +1,23 @@
 library(tidyverse)
 library(raster)
+library(velox)
+library(fasterize)
+library(RPostgreSQL)
+library(DBI)
 library(sf)
-source("./R/aggregate_forest_loss_to_30sec_grid.R")
-gtopo_dir <- "/mnt/nfs_fineprint/tmp/GTOPO30"
-pixel_area_dir <- "/mnt/nfs_fineprint/tmp/hansen_pixel_area"
-forest_loss_dir <- "/mnt/nfs_fineprint/tmp/hansen/lossyear"
-treecover2000_dir <- "/mnt/nfs_fineprint/tmp/hansen/treecover2000"
-grid_output_path <- "/mnt/nfs_fineprint/tmp/grid_30sec"
-ecoregions_path <- "/mnt/nfs_fineprint/tmp/ecoregions/Ecoregions2017.shp"
-protected_area_path <- "/mnt/nfs_fineprint/tmp/protected_areas/WDPA_Feb2019-shapefile-polygons.shp"
-forest_loss_output_path <- "/mnt/nfs_fineprint/tmp/forest_loss_30sec"
+library(parallel)
 
-log_file <- date() %>% 
-  stringr::str_replace_all(" ", "_") %>% 
-  str_replace_all(":", "") %>% 
-  stringr::str_glue(".log") 
+source("./R/aggregate_forest_loss_to_30sec_grid.R")
+if(!exists("data_path"))
+  data_path <- "/mnt/nfs_fineprint/tmp"
+
+gtopo_dir <- path.expand(paste0(data_path, "/data/gtopo30"))
+pixel_area_dir <- path.expand(paste0(data_path, "/data/hansen_pixel_area"))
+forest_loss_dir <- path.expand(paste0(data_path, "/data/hansen/lossyear"))
+treecover2000_dir <- path.expand(paste0(data_path, "/data/hansen/treecover2000"))
+ecoregions_path <- path.expand(paste0(data_path, "/data/ecoregions/Ecoregions2017.shp"))
+protected_area_path <- path.expand(paste0(data_path, "/data/protected_areas/WDPA_Apr2019-shapefile-polygons.shp"))
+forest_loss_output_path <- path.expand(paste0(data_path, "/data/forest_loss_30sec"))
 
 # 1. Read/Load ecoregions and protected areas
 sf_list = list(ecoregion = sf::read_sf(ecoregions_path) %>% 
@@ -47,22 +50,31 @@ tiles_forest_loss <- dir(pixel_area_dir, pattern = ".tif$", full.name = TRUE) %>
   dplyr::ungroup()  
 
 # 4. Check tiles already processed 
-tiles_done <- dir(forest_loss_output_path, pattern = ".csv") %>% 
-  stringr::str_replace_all(".csv", "") %>% 
-  stringr::str_split("_") %>% 
-  sapply(tail, n = 1)
+# tiles_done <- dir(forest_loss_output_path, pattern = ".csv") %>% 
+#   stringr::str_replace_all(".csv", "") %>% 
+#   stringr::str_split("_") %>% 
+#   sapply(tail, n = 1)
+
+# Get job id 
+if(!exists("job_id"))
+  job_id <- seq_along(tiles_forest_loss$id_hansen)
+
+log_file <- date() %>% 
+  stringr::str_replace_all("  ", "_") %>% 
+  stringr::str_replace_all(" ", "_") %>% 
+  str_replace_all(":", "") %>% 
+  stringr::str_glue("job_id_", job_id, "_" ,.,".log") 
 
 # 5. Aggregate Hansens forest loss to 30 arc-sec grid 
 tiles_aggregated_forest_loss <- tiles_forest_loss %>% 
-  # dplyr::fileter(id_gtopo == job_id) %>% # Used split processing in the WU cluster 
-  sf::st_join(y = tiles_gtopo, join = sf::st_covered_by, left = TRUE) %>% 
-  dplyr::filter(!id_hansen %in% tiles_done) %>% 
-  dplyr::mutate(out_file = purrr::pmap_chr(.l = list(area, year, id_hansen, id_gtopo, dem), 
+  sf::st_join(y = tiles_gtopo, join = sf::st_covered_by, left = TRUE) %>%
+  dplyr::filter(id_hansen == id_hansen[job_id]) %>% # Split jobs among WU cluster nodes 
+  dplyr::mutate(out_file = purrr::pmap_chr(.l = list(area, year, treecover2000, id_hansen, id_gtopo, dem), 
                                            .f = aggregate_forest_loss_to_30sec_grid,
                                            sf_list = sf_list, 
                                            output_path = forest_loss_output_path, 
                                            log_file = log_file, 
-                                           ncores = 12))
+                                           ncores = 20))
 
 dir.create("./output", showWarnings = FALSE, recursive = TRUE)
 sf::write_sf(tiles_aggregated_forest_loss, "./output/tiles_aggregated_forest_loss.gpkg")
