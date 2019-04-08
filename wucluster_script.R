@@ -3,16 +3,21 @@ library(raster)
 library(velox)
 library(fasterize)
 library(RPostgreSQL)
+library(DBI)
 library(sf)
+library(parallel)
 
 source("./R/aggregate_forest_loss_to_30sec_grid.R")
-gtopo_dir <- path.expand("~/data/gtopo30")
-pixel_area_dir <- path.expand("~/data/hansen_pixel_area")
-forest_loss_dir <- path.expand("~/data/hansen/lossyear")
-treecover2000_dir <- path.expand("~/data/hansen/treecover2000")
-ecoregions_path <- path.expand("~/data/ecoregions/Ecoregions2017.shp")
-protected_area_path <- path.expand("~/data/protected_areas/WDPA_Apr2019-shapefile-polygons.shp")
-forest_loss_output_path <- path.expand("~/data/forest_loss_30sec")
+if(!exists("data_path"))
+  data_path <- "/mnt/nfs_fineprint/tmp"
+
+gtopo_dir <- path.expand(paste0(data_path, "/data/gtopo30"))
+pixel_area_dir <- path.expand(paste0(data_path, "/data/hansen_pixel_area"))
+forest_loss_dir <- path.expand(paste0(data_path, "/data/hansen/lossyear"))
+treecover2000_dir <- path.expand(paste0(data_path, "/data/hansen/treecover2000"))
+ecoregions_path <- path.expand(paste0(data_path, "/data/ecoregions/Ecoregions2017.shp"))
+protected_area_path <- path.expand(paste0(data_path, "/data/protected_areas/WDPA_Apr2019-shapefile-polygons.shp"))
+forest_loss_output_path <- path.expand(paste0(data_path, "/data/forest_loss_30sec"))
 
 # 1. Read/Load ecoregions and protected areas
 sf_list = list(ecoregion = sf::read_sf(ecoregions_path) %>% 
@@ -64,7 +69,7 @@ log_file <- date() %>%
 tiles_aggregated_forest_loss <- tiles_forest_loss %>% 
   sf::st_join(y = tiles_gtopo, join = sf::st_covered_by, left = TRUE) %>%
   dplyr::filter(id_hansen == id_hansen[job_id]) %>% # Split jobs among WU cluster nodes 
-  dplyr::mutate(out_file = purrr::pmap_chr(.l = list(area, year, id_hansen, id_gtopo, dem), 
+  dplyr::mutate(out_file = purrr::pmap_chr(.l = list(area, year, treecover2000, id_hansen, id_gtopo, dem), 
                                            .f = aggregate_forest_loss_to_30sec_grid,
                                            sf_list = sf_list, 
                                            output_path = forest_loss_output_path, 

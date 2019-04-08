@@ -1,4 +1,4 @@
-aggregate_forest_loss_to_30sec_grid <- function(area, year, id_hansen, id_gtopo, dem, sf_list, output_path, log_file, ncores){
+aggregate_forest_loss_to_30sec_grid <- function(area, year, treecover2000, id_hansen, id_gtopo, dem, sf_list, output_path, log_file, ncores){
 
   # area <- tiles_aggregated_forest_loss$area[1]
   # year <- tiles_aggregated_forest_loss$year[1]
@@ -95,29 +95,40 @@ aggregate_forest_loss_to_30sec_grid <- function(area, year, id_hansen, id_gtopo,
     return(list(grid = sub_tile_grid, tbl = forest_loss_area))
     
   })
-  
+
   # connect PostGIS database ------------------------------------------------
-  Sys.setenv(PGPASSFILE=".pgpass")
-  conn <- DBI::dbConnect(RPostgreSQL::PostgreSQL(),
-                         host = Sys.getenv("db_host"),
-                         port = Sys.getenv("db_port"),
-                         dbname = Sys.getenv("db_name"),
-                         user = "postgres")
+  # conn <- DBI::dbConnect(RPostgreSQL::PostgreSQL(),
+  #                       host = Sys.getenv("db_host"),
+  #                       port = Sys.getenv("db_port"),
+  #                       dbname = Sys.getenv("db_name"),
+  #                       user = Sys.getenv("db_user"),
+  #                       password = Sys.getenv("db_password"))
   
   # Insert grid to db  ------------------------------------------------------
   ## DBI::dbSendQuery(conn = conn, statement = paste0("DELETE FROM forest;"))
   ## DBI::dbSendQuery(conn = conn, statement = paste0("DELETE FROM grid;"))
-  do.call("rbind", lapply(block_values, function(x) x$grid)) %>% 
-    sf::st_write(dsn = conn, layer = "grid", append = TRUE, factorsAsCharacter = TRUE)
+  #do.call("rbind", lapply(block_values, function(x) x$grid)) %>% 
+  #  sf::st_write(dsn = conn, layer = "grid", append = TRUE, factorsAsCharacter = TRUE)
 
   # Insert forest data to db  -----------------------------------------------
-  db_status <- dplyr::bind_rows(lapply(block_values, function(x) x$tbl)) %>% 
-    DBI::dbWriteTable(conn = conn, name = "forest", append = TRUE, value = ., row.names = FALSE)
+  #db_status <- dplyr::bind_rows(lapply(block_values, function(x) x$tbl)) %>% 
+  #  DBI::dbWriteTable(conn = conn, name = "forest", append = TRUE, value = ., row.names = FALSE)
   
   # disconnect PostGIS database ---------------------------------------------
-  DBI::dbDisconnect(conn)
+  #DBI::dbDisconnect(conn)
+  #cat(paste0("\nTile ", id_hansen, " done with DB insert ", db_status, " ", capture.output(Sys.time() - start_time)), file = log_file, append = TRUE)
+  #return(db_status)
+
+  ### pfusch - replace with DB connection  
+  grid_fname <- paste0(output_path, "/", id_gtopo, "_", id_hansen, ".shp")
+  data_fname <- paste0(output_path, "/", id_gtopo, "_", id_hansen, ".csv")
+  do.call("rbind", lapply(block_values, function(x) x$grid)) %>%
+    sf::st_write(dsn = grid_fname, factorsAsCharacter = TRUE, delete_layer = TRUE)
   
-  cat(paste0("\nTile ", id_hansen, " done with DB insert ", db_status, " ", capture.output(Sys.time() - start_time)), file = log_file, append = TRUE)
-  return(db_status)
+  dplyr::bind_rows(lapply(block_values, function(x) x$tbl)) %>%
+    readr::write_csv(path = data_fname, append = FALSE)
+ 
+  cat(paste0("\nTile ", id_hansen, " done! ", capture.output(Sys.time() - start_time)), file = log_file, append = TRUE)
+  return(data_fname)
   
 }
