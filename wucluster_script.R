@@ -76,5 +76,6 @@ tiles_aggregated_forest_loss <- tiles_forest_loss %>%
                                            log_file = log_file, 
                                            ncores = 20))
 
-dir.create("./output", showWarnings = FALSE, recursive = TRUE)
-sf::write_sf(tiles_aggregated_forest_loss, "./output/tiles_aggregated_forest_loss.gpkg")
+#dir.create("./output", showWarnings = FALSE, recursive = TRUE)
+#sf::write_sf(tiles_aggregated_forest_loss, "./output/tiles_aggregated_forest_loss.shp")
+
