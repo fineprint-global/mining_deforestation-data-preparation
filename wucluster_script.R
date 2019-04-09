@@ -59,11 +59,11 @@ tiles_forest_loss <- dir(pixel_area_dir, pattern = ".tif$", full.name = TRUE) %>
 if(!exists("job_id"))
   job_id <- seq_along(tiles_forest_loss$id_hansen)
 
-log_file <- date() %>% 
-  stringr::str_replace_all("  ", "_") %>% 
-  stringr::str_replace_all(" ", "_") %>% 
-  str_replace_all(":", "") %>% 
-  stringr::str_glue("job_id_", job_id, "_" ,.,".log") 
+# log_file <- date() %>% 
+#   stringr::str_replace_all("  ", "_") %>% 
+#   stringr::str_replace_all(" ", "_") %>% 
+#   str_replace_all(":", "") %>% 
+#   stringr::str_glue("job_id_", job_id, "_" ,.,".log") 
 
 # 5. Aggregate Hansens forest loss to 30 arc-sec grid 
 tiles_aggregated_forest_loss <- tiles_forest_loss %>% 
@@ -73,9 +73,8 @@ tiles_aggregated_forest_loss <- tiles_forest_loss %>%
                                            .f = aggregate_forest_loss_to_30sec_grid,
                                            sf_list = sf_list, 
                                            output_path = forest_loss_output_path, 
-                                           log_file = log_file, 
+                                           # log_file = log_file, 
                                            ncores = 20))
 
-#dir.create("./output", showWarnings = FALSE, recursive = TRUE)
-#sf::write_sf(tiles_aggregated_forest_loss, "./output/tiles_aggregated_forest_loss.shp")
-
+# dir.create("./output", showWarnings = FALSE, recursive = TRUE)
+# sf::write_sf(tiles_aggregated_forest_loss, "./output/tiles_aggregated_forest_loss.gpkg")
