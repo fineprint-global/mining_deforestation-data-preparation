@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+CAUTION: Do not modify this file unless you know what you are doing.
+         Unexpected results may occur if the code is changed deliberately.
+-->
+<dbmodel pgmodeler-ver="0.9.1-beta" last-position="527,253" last-zoom="1.15"
+	 default-schema="public" default-owner="postgres">
+<database name="deforestation" prepend-at-bod="true">
+	<role name="postgres"/>
+	<prepended-sql><![CDATA[CREATE EXTENSION postgis;
+]]></prepended-sql>
+</database>
+
+<schema name="public" fill-color="#e1e1e1" sql-disabled="true">
+</schema>
+
+<table name="grid">
+	<schema name="public"/>
+	<position x="560" y="280"/>
+	<column name="id" not-null="true">
+		<type name="varchar" length="17"/>
+	</column>
+	<column name="geometry" not-null="true">
+		<type name="geometry" length="0" spatial-type="POLYGON" variation="0" srid="0"/>
+	</column>
+	<column name="elevation">
+		<type name="float4" length="0"/>
+	</column>
+	<constraint name="grid_pk" type="pk-constr" table="public.grid">
+		<columns names="id" ref-type="src-columns"/>
+	</constraint>
+</table>
+
+<index name="idx_geom" table="public.grid"
+	 concurrent="false" unique="false" fast-update="false" buffering="false"
+	 index-type="btree" factor="0">
+		<idxelement use-sorting="true" nulls-first="false" asc-order="true">
+			<column name="geometry"/>
+		</idxelement>
+</index>
+
+<table name="forest">
+	<schema name="public"/>
+	<position x="1100" y="360"/>
+	<column name="id" not-null="true">
+		<type name="bigserial" length="0"/>
+	</column>
+	<column name="year" not-null="true">
+		<type name="smallint" length="0"/>
+	</column>
+	<column name="area_forest">
+		<type name="double precision" length="0"/>
+	</column>
+	<column name="area_loss">
+		<type name="double precision" length="0"/>
+	</column>
+	<column name="ecoregion">
+		<type name="smallint" length="0"/>
+	</column>
+	<column name="protected">
+		<type name="boolean" length="0"/>
+	</column>
+	<column name="accumulated_loss">
+		<type name="double precision" length="0"/>
+	</column>
+	<constraint name="forest_pk" type="pk-constr" table="public.forest">
+		<columns names="id" ref-type="src-columns"/>
+	</constraint>
+
+	<customidxs object-type="column">
+		<object name="id_grid" index="1"/>
+	</customidxs>
+
+	<customidxs object-type="constraint">
+		<object name="grid_fk" index="1"/>
+	</customidxs>
+</table>
+
+<index name="idx_year" table="public.forest"
+	 concurrent="false" unique="false" fast-update="false" buffering="false"
+	 index-type="btree" factor="0">
+		<idxelement use-sorting="false">
+			<column name="year"/>
+		</idxelement>
+</index>
+
+<relationship name="grid_has_many_forest" type="rel1n"
+	 src-col-pattern="{sc}_{st}"
+	 pk-pattern="{dt}_pk" uq-pattern="{dt}_uq"
+	 src-fk-pattern="{st}_fk"
+	 custom-color="#6c132d"
+	 src-table="public.grid"
+	 dst-table="public.forest"
+	 src-required="true" dst-required="false"/>
+
+<index name="idx_grid" table="public.grid"
+	 concurrent="false" unique="false" fast-update="false" buffering="false"
+	 index-type="btree" factor="0">
+		<idxelement use-sorting="false">
+			<column name="id"/>
+		</idxelement>
+</index>
+
+<index name="idx_ecoregion" table="public.forest"
+	 concurrent="false" unique="false" fast-update="false" buffering="false"
+	 index-type="btree" factor="0">
+		<idxelement use-sorting="false">
+			<column name="ecoregion"/>
+		</idxelement>
+</index>
+
+</dbmodel>
