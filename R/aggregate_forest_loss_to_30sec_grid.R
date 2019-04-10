@@ -28,8 +28,16 @@ aggregate_forest_loss_to_30sec_grid <- function(area, year, treecover2000, id_ha
   # cat(paste0("\nProcessing forest loss tile ", id_hansen, " using ", ncores," cores"), file = log_file, append = TRUE)
   cat(paste0("\nProcessing forest loss tile ", id_hansen, " using ", ncores," cores"))
   
-  block_values <- parallel::mclapply(1:r_blocks$n, mc.cores = ncores, function(b){
+#  block_values <- parallel::mclapply(1:r_blocks$n, mc.cores = ncores, function(b){
+  block_values <- lapply(1:r_blocks$n, function(b){
     
+    grid_fname <- paste0(output_path, "/", id_gtopo, "_", id_hansen, "_", b, ".shp")
+    data_fname <- paste0(output_path, "/", id_gtopo, "_", id_hansen, "_", b, ".csv")
+
+    if(file.exists(grid_fname) && file.exists(data_fname)){
+      return(TRUE)
+    }
+
     # cat(paste0("\nProcessing block ", b, "/", r_blocks$n,""), file = log_file, append = TRUE)
     cat(paste0("\nProcessing block ", b, "/", r_blocks$n,""))
     
@@ -94,13 +102,13 @@ aggregate_forest_loss_to_30sec_grid <- function(area, year, treecover2000, id_ha
       dplyr::select(id = id_grid, elevation)
 
     ### pfusch - replace with DB connection  
-    grid_fname <- paste0(output_path, "/", id_gtopo, "_", id_hansen, "_", b, ".shp")
-    data_fname <- paste0(output_path, "/", id_gtopo, "_", id_hansen, "_", b, ".csv")
+    #grid_fname <- paste0(output_path, "/", id_gtopo, "_", id_hansen, "_", b, ".shp")
+    #data_fname <- paste0(output_path, "/", id_gtopo, "_", id_hansen, "_", b, ".csv")
     sf::st_write(sub_tile_grid, dsn = grid_fname, factorsAsCharacter = TRUE)
     readr::write_csv(forest_loss_area, path = data_fname)
     
     # cat(paste0("\nTile ", id_hansen, " done! ", capture.output(Sys.time() - start_time)), file = log_file, append = TRUE)
-    cat(paste0("\nTile ", id_hansen, " done! ", capture.output(Sys.time() - start_time)))
+    cat(paste0("\nTile ", id_hansen, " subtile ", b, " done! ", capture.output(Sys.time() - start_time)))
     
     return(TRUE)
     

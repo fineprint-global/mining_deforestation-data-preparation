@@ -74,7 +74,7 @@ tiles_aggregated_forest_loss <- tiles_forest_loss %>%
                                            sf_list = sf_list, 
                                            output_path = forest_loss_output_path, 
                                            # log_file = log_file, 
-                                           ncores = 20))
+                                           ncores = 1))
 
 # dir.create("./output", showWarnings = FALSE, recursive = TRUE)
 # sf::write_sf(tiles_aggregated_forest_loss, "./output/tiles_aggregated_forest_loss.gpkg")
