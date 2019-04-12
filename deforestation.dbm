@@ -3,7 +3,7 @@
 CAUTION: Do not modify this file unless you know what you are doing.
          Unexpected results may occur if the code is changed deliberately.
 -->
-<dbmodel pgmodeler-ver="0.9.1-beta" last-position="0,33" last-zoom="1.15"
+<dbmodel pgmodeler-ver="0.9.1-beta" last-position="0,0" last-zoom="1.15"
 	 default-schema="public" default-owner="postgres">
 <database name="deforestation" prepend-at-bod="true">
 	<role name="postgres"/>
@@ -16,9 +16,9 @@ CAUTION: Do not modify this file unless you know what you are doing.
 
 <table name="grid">
 	<schema name="public"/>
-	<position x="560" y="220"/>
+	<position x="340" y="160"/>
 	<column name="id" not-null="true">
-		<type name="varchar" length="17"/>
+		<type name="varchar" length="24"/>
 	</column>
 	<column name="geometry" not-null="true">
 		<type name="geometry" length="0" spatial-type="POLYGON" variation="0" srid="0"/>
@@ -44,7 +44,7 @@ CAUTION: Do not modify this file unless you know what you are doing.
 
 <table name="forest">
 	<schema name="public"/>
-	<position x="1100" y="340"/>
+	<position x="900" y="240"/>
 	<column name="id" not-null="true">
 		<type name="bigserial" length="0"/>
 	</column>
