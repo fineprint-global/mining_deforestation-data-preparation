@@ -16,10 +16,10 @@ log_file <- date() %>%
 # Clean forest table --------------------------------------------------------
 file_path <- dir("~/workspace/data/forest_loss_30sec", pattern = ".csv$", full.names = TRUE)
 
-out <- parallel::mclapply(seq_along(file_path), mc.cores = 12, function(i){
+out <- parallel::mclapply(seq_along(file_path), mc.cores = 20, mc.preschedule = FALSE, function(i){
 
   f <- file_path[i]  
-  cat(paste0(i, "/", length(file_path), " Inserting ",f," data to DB\n"), file = log_file, append = TRUE)
+  cat(paste0(i, "/", length(file_path), " Inserting ",f," data to DB\n"))
   # connect PostGIS database --------------------------------------------------
   conn <- DBI::dbConnect(RPostgreSQL::PostgreSQL(),
                          host = Sys.getenv("db_host"),
@@ -35,9 +35,33 @@ out <- parallel::mclapply(seq_along(file_path), mc.cores = 12, function(i){
     sf::st_read(quiet = TRUE, stringsAsFactors = FALSE) 
   cat("Done\n")
   
+  # DELETEME - Fixes id problem 
+  new_id <- basename(f) %>%
+    stringr::str_remove_all(".csv") %>%
+    stringr::str_split(pattern = "_") %>%
+    unlist()
+  
+  new_id <- paste0(new_id[1], new_id[2], stringr::str_pad(string = new_id[3], width = 4, pad = "0"), "B")
+  
+  concordance_id <- tibble(old_id = grid_tbl$id, new_id) %>% 
+    tibble::rowid_to_column(var = "id_grid") %>% 
+    dplyr::mutate(id_grid = stringr::str_pad(string = id_grid, width = 5, pad = "0")) %>% 
+    dplyr::mutate(new_id = paste0(new_id, id_grid)) %>% 
+    dplyr::select(-id_grid)
+  
+  forest_tbl <- forest_tbl %>% 
+    dplyr::left_join(concordance_id, by = c("id_grid" = "old_id")) %>% 
+    dplyr::select(-id_grid) %>% 
+    dplyr::rename(id_grid = new_id)
+  
+  grid_tbl <- grid_tbl %>% 
+    dplyr::left_join(concordance_id, by = c("id" = "old_id")) %>% 
+    dplyr::select(id = new_id, elevation)
+  ## DELETE TILL HERE   
+  
   # Insert grid to db  ------------------------------------------------------
   cat("  Inserting grid geometry... ")
-  forest_tbl %>% 
+  db_log <- try(silent = TRUE, forest_tbl %>% 
     dplyr::filter(year == 2000) %>%  
     dplyr::select(id_grid, year, area_forest) %>% 
     dplyr::group_by(id_grid, year) %>% 
@@ -45,13 +69,21 @@ out <- parallel::mclapply(seq_along(file_path), mc.cores = 12, function(i){
     dplyr::ungroup() %>% 
     dplyr::select(id = id_grid, area_forest_2000 = area_forest) %>% 
     dplyr::right_join(grid_tbl, by = c("id" = "id")) %>% 
-    sf::st_write(dsn = conn, layer = "grid", append = TRUE, factorsAsCharacter = TRUE, quiet = TRUE)
-  cat("Done\n")
+    sf::st_write(dsn = conn, layer = "grid", append = TRUE, factorsAsCharacter = TRUE, quiet = TRUE))
+  if(class(db_log)=="try-error"){
+    cat(paste0(f, "\n", db_log), file = log_file, append = TRUE)
+  } else {
+    cat(paste0(i, "/", length(file_path), " SUCCESS grid data inserted from ",f," to DB \n"), file = log_file, append = TRUE)
+  }
   
   # Insert forest data to db  -----------------------------------------------
   cat("  Inserting forest data... ")
-  DBI::dbWriteTable(conn = conn, name = "forest", append = TRUE, value = forest_tbl, row.names = FALSE)
-  cat("Done\n")
+  db_log <- try(silent = TRUE, DBI::dbWriteTable(conn = conn, name = "forest", append = TRUE, value = forest_tbl, row.names = FALSE))
+  if(class(db_log)=="try-error"){
+    cat(paste0(f, "\n", db_log), file = log_file, append = TRUE)
+  } else {
+    cat(paste0(i, "/", length(file_path), " SUCCESS forest data inserted from ",f," to DB \n"), file = log_file, append = TRUE)
+  }
 
   # disconnect PostGIS database -----------------------------------------------
   DBI::dbDisconnect(conn)
