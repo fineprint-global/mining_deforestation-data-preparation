@@ -3,7 +3,7 @@
 CAUTION: Do not modify this file unless you know what you are doing.
          Unexpected results may occur if the code is changed deliberately.
 -->
-<dbmodel pgmodeler-ver="0.9.1-beta" last-position="527,253" last-zoom="1.15"
+<dbmodel pgmodeler-ver="0.9.1-beta" last-position="0,33" last-zoom="1.15"
 	 default-schema="public" default-owner="postgres">
 <database name="deforestation" prepend-at-bod="true">
 	<role name="postgres"/>
@@ -16,7 +16,7 @@ CAUTION: Do not modify this file unless you know what you are doing.
 
 <table name="grid">
 	<schema name="public"/>
-	<position x="560" y="280"/>
+	<position x="560" y="220"/>
 	<column name="id" not-null="true">
 		<type name="varchar" length="17"/>
 	</column>
@@ -26,22 +26,25 @@ CAUTION: Do not modify this file unless you know what you are doing.
 	<column name="elevation">
 		<type name="float4" length="0"/>
 	</column>
+	<column name="area_forest_2000">
+		<type name="double precision" length="0"/>
+	</column>
 	<constraint name="grid_pk" type="pk-constr" table="public.grid">
 		<columns names="id" ref-type="src-columns"/>
 	</constraint>
 </table>
 
-<index name="idx_geom" table="public.grid"
+<index name="idx_gridgeom" table="public.grid"
 	 concurrent="false" unique="false" fast-update="false" buffering="false"
-	 index-type="btree" factor="0">
-		<idxelement use-sorting="true" nulls-first="false" asc-order="true">
+	 index-type="gist" factor="0">
+		<idxelement use-sorting="false">
 			<column name="geometry"/>
 		</idxelement>
 </index>
 
 <table name="forest">
 	<schema name="public"/>
-	<position x="1100" y="360"/>
+	<position x="1100" y="340"/>
 	<column name="id" not-null="true">
 		<type name="bigserial" length="0"/>
 	</column>
@@ -95,7 +98,7 @@ CAUTION: Do not modify this file unless you know what you are doing.
 
 <index name="idx_grid" table="public.grid"
 	 concurrent="false" unique="false" fast-update="false" buffering="false"
-	 index-type="btree" factor="0">
+	 index-type="spgist" factor="0">
 		<idxelement use-sorting="false">
 			<column name="id"/>
 		</idxelement>
@@ -106,6 +109,14 @@ CAUTION: Do not modify this file unless you know what you are doing.
 	 index-type="btree" factor="0">
 		<idxelement use-sorting="false">
 			<column name="ecoregion"/>
+		</idxelement>
+</index>
+
+<index name="idx_gridfk" table="public.forest"
+	 concurrent="false" unique="false" fast-update="false" buffering="false"
+	 index-type="spgist" factor="0">
+		<idxelement use-sorting="false">
+			<column name="id_grid"/>
 		</idxelement>
 </index>
 
