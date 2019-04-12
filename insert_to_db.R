@@ -6,7 +6,10 @@ library(parallel)
 readRenviron(".Renviron")
 
 # Move data from wucluster 
-# rsync -avzhe ssh --progress vmaus@clusterwu:/gpfs/home/home/vmaus/data/forest_loss_30sec .
+# sync: rsync -avzh -e ssh vmaus@clusterwu:/gpfs/home/home/vmaus/data/forest_loss_30sec/* .
+# check for changes: rsync -aunv -e ssh vmaus@clusterwu:/gpfs/home/home/vmaus/data/forest_loss_30sec/* .
+# update files: rsync -avzh --update -e ssh vmaus@clusterwu:/gpfs/home/home/vmaus/data/forest_loss_30sec/* .
+# new files only: rsync -avzh --ignore-existing -e ssh vmaus@clusterwu:/gpfs/home/home/vmaus/data/forest_loss_30sec/* .
 
 log_file <- date() %>% 
   stringr::str_replace_all(" ", "_") %>% 
@@ -73,16 +76,14 @@ out <- parallel::mclapply(seq_along(file_path), mc.cores = 20, mc.preschedule = 
   if(class(db_log)=="try-error"){
     cat(paste0(f, "\n", db_log), file = log_file, append = TRUE)
   } else {
-    cat(paste0(i, "/", length(file_path), " SUCCESS grid data inserted from ",f," to DB \n"), file = log_file, append = TRUE)
-  }
-  
-  # Insert forest data to db  -----------------------------------------------
-  cat("  Inserting forest data... ")
-  db_log <- try(silent = TRUE, DBI::dbWriteTable(conn = conn, name = "forest", append = TRUE, value = forest_tbl, row.names = FALSE))
-  if(class(db_log)=="try-error"){
-    cat(paste0(f, "\n", db_log), file = log_file, append = TRUE)
-  } else {
-    cat(paste0(i, "/", length(file_path), " SUCCESS forest data inserted from ",f," to DB \n"), file = log_file, append = TRUE)
+    # Insert forest data to db  -----------------------------------------------
+    cat("  Inserting forest data... ")
+    db_log <- try(silent = TRUE, DBI::dbWriteTable(conn = conn, name = "forest", append = TRUE, value = forest_tbl, row.names = FALSE))
+    if(class(db_log)=="try-error"){
+      cat(paste0(f, "\n", db_log), file = log_file, append = TRUE)
+    } else {
+      cat(paste0(i, "/", length(file_path), " SUCCESS forest data inserted from ",f," to DB \n"), file = log_file, append = TRUE)
+    }
   }
 
   # disconnect PostGIS database -----------------------------------------------
