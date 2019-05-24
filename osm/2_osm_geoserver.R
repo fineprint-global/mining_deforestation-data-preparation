@@ -28,7 +28,7 @@ layertypes_cap <- gsub("(?<=\\b)([a-z])", "\\U\\1", tolower(layertypes), perl = 
 
 for(i in seq_along(regions)) {
   for(j in seq_along(layertypes)) {
-    cat(regions[i], layertypes[i], "-", gs_post_xml(
+    cat(regions[i], layertypes[j], "-", gs_post_xml(
       gs_xml_cov(
         name = paste0("infrastructure_", regions[i], "_", layertypes[j]),
         title = paste0("Infrastructure, ", regions_cap[i], ", OSM, ", layertypes_cap[j]),
@@ -43,10 +43,10 @@ for(i in seq_along(regions)) {
         path = "/mnt/nfs_fineprint/data/geoserver/openstreetmap/infrastructure/2019/dl_2019-05/australia-oceania.gpkg",
         layertype = layertypes[j],
         datastore = paste0("infrastructure_", regions[i], "_osm"),
-        licence = "CC BY-SA 2.0"
+        licence = "CC BY-SA 2-0"
       ),
       url = paste0("http://fineprint.wu.ac.at:8080/geoserver/rest/workspaces/openstreetmap-2019/datastores/", 
-                   "infrastructure_", regions[i], "_osm/featuretypes")
+                   "infrastructure_", regions[i], "_osm/featuretypes/")
       ), "\n")
   }
 }
