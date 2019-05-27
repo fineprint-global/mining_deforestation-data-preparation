@@ -11,9 +11,6 @@ library(raster)
 soilgrids <- raster::raster("soil_classification_250m_TAXNWRB.tif")
 image(soilgrids)
 
-# re-write data
-raster::writeRaster(soilgrids, "soil_classification_250m_TAXNWRB.tif")
-
 # Post it to Geoserver
 
 library(fineprintutils)
