@@ -34,3 +34,6 @@ nohup*
 aux.R
 .Renviron
 .pgpass
+forestloss.e*
+forestloss.o*
+core
