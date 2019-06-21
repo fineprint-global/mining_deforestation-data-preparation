@@ -15,11 +15,12 @@ R-g --vanilla <<-EOF
   print(.libPaths())
 
   # Get job id
+  # Each job process one tile from hansen forest loss data set
   job_id <- as.integer(Sys.getenv("SGE_TASK_ID"))
   print(job_id)
 
   # Run job 
-  source("./wucluster_script.R")
+  source("./build_fineprint_30sec_grid.R")
 
 EOF
 
