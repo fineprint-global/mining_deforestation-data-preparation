@@ -14,17 +14,6 @@ R-g --vanilla <<-EOF
   .libPaths(c(Sys.getenv("R_LIBS_USER"), .libPaths()))
   print(.libPaths())
 
-  # Test DB connection 
-#  conn <- DBI::dbConnect(RPostgreSQL::PostgreSQL(),
-#                         host = Sys.getenv("db_host"),
-#                         port = Sys.getenv("db_port"),
-#                         dbname = Sys.getenv("db_name"),
-#                         user = Sys.getenv("db_user"),
-#                         password = Sys.getenv("db_password"))
-#
-#  DBI::dbListTables(conn = conn)
-#  DBI::dbDisconnect(conn = conn)
-
   # Get job id
   job_id <- as.integer(Sys.getenv("SGE_TASK_ID"))
   print(job_id)
