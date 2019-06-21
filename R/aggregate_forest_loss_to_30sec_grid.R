@@ -54,8 +54,8 @@ aggregate_forest_loss_to_30sec_grid <- function(area, year, treecover2000, id_ha
       sf::st_as_sf(x, merge = FALSE, as_points = FALSE) %>% 
       dplyr::rename(elevation = dem) %>% 
       tibble::rowid_to_column(var = "id") %>% 
-      dplyr::mutate(id_grid = stringr::str_pad(string = id, width = 4, pad = "0")) %>% 
-      dplyr::mutate(id_grid = paste0(id_hansen, stringr::str_pad(string = r_blocks$row[b], width = 5, pad = "0"), "B", id_grid)) 
+      dplyr::mutate(id_grid = stringr::str_pad(string = id, width = 5, pad = "0")) %>% 
+      dplyr::mutate(id_grid = paste0(id_gtopo, id_hansen, stringr::str_pad(string = b, width = 4, pad = "0"), "B", id_grid)) 
     
     if(nrow(sub_tile_grid) < 1){
       return(NULL)
