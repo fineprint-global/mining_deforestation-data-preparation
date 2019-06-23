@@ -6,6 +6,7 @@ library(fasterize)
 library(sf)
 library(parallel)
 source("./R/aggregate_forest_loss_to_30sec_grid.R")
+raster::rasterOptions(tmpdir = "./raster_tmp/")
 
 # --------------------------------------------------------------------------------------
 # set path to data sets 
@@ -19,11 +20,11 @@ dir.create(output_path, showWarnings = FALSE, recursive = TRUE)
 
 # --------------------------------------------------------------------------------------
 # path to 30sec grid files 
-pop_2000 <- path.expand(paste0(fineprint_grid_30sec_path, "/pop_2000.tif"))
+pop_2000 <- path.expand(paste0(fineprint_grid_30sec_path, "/population_density_2000.tif"))
 elevation <- path.expand(paste0(fineprint_grid_30sec_path, "/elevation.tif"))
 slope <- path.expand(paste0(fineprint_grid_30sec_path, "/slope.tif"))
 soilgrid <- path.expand(paste0(fineprint_grid_30sec_path, "/soilgrid.tif"))
-esa_cci_2000 <- path.expand(paste0(fineprint_grid_30sec_path, "esa_cci_2000.tif"))
+esa_cci_2000 <- path.expand(paste0(fineprint_grid_30sec_path, "/esa_cci_2000.tif"))
 
 # --------------------------------------------------------------------------------------
 # get vector files 

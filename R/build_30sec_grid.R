@@ -12,15 +12,14 @@ build_30sec_grid <- function(job_id, id_hansen, area, year, grid_30sec, sf_list,
   
   # --------------------------------------------------------------------------------------
   # stack raster files 
-  tile_loss <- raster::stack(c(area = area, year = year, treecover2000 = treecover2000))
-  tile_2000 <- raster::stack(c(area = area, treecover2000 = treecover2000))
-  names(tile_loss) <- c("area", "year", "treecover2000")
-  names(tile_2000) <- c("area", "treecover2000")
+  tile <- raster::stack(c(area = area, year = year, treecover2000 = treecover2000))
+  names(tile) <- c("area", "year", "treecover2000")
   
   # --------------------------------------------------------------------------------------
   # Split processing blocks
-  r_blocks <- raster::blockSize(tile_loss, minrows = 160)
-  grid_fname <- paste0(output_path, "/", id_hansen, ".tif")
+  r_blocks <- raster::blockSize(tile, minrows = 160)
+  output_path <- paste0(output_path, "/forest_timeseries")
+  dir.create(output_path, showWarnings = FALSE, recursive = TRUE)
   
   # --------------------------------------------------------------------------------------
   # Parallel processing 
@@ -32,8 +31,8 @@ build_30sec_grid <- function(job_id, id_hansen, area, year, grid_30sec, sf_list,
   #  block_values <- parallel::mclapply(1:r_blocks$n, mc.cores = ncores, function(b){
   block_values <- lapply(1:r_blocks$n, function(b){
     
-    grid_fname <- paste0(output_path, "/", id_hansen, "_", b, ".shp")
-    data_fname <- paste0(output_path, "/", id_hansen, "_", b, ".csv")
+    grid_fname <- paste0(output_path, "/", id_hansen, "_", stringr::str_pad(string = b, width = 4, pad = "0"), ".geojson")
+    data_fname <- paste0(output_path, "/", id_hansen, "_", stringr::str_pad(string = b, width = 4, pad = "0"), ".csv")
     
     if(file.exists(grid_fname) && file.exists(data_fname)){
       return(TRUE)
@@ -44,16 +43,17 @@ build_30sec_grid <- function(job_id, id_hansen, area, year, grid_30sec, sf_list,
     
     # --------------------------------------------------------------------------------------
     # Get sub tile extent 
-    sub_tile_extent <- raster::extent(tile_loss, r_blocks$row[b], r_blocks$row[b] + r_blocks$nrows[b] - 1, 1, ncol(tile_loss))
+    sub_tile_extent <- raster::extent(tile, r_blocks$row[b], r_blocks$row[b] + r_blocks$nrows[b] - 1, 1, ncol(tile))
     sub_tile_bbox <- sf::st_bbox(sub_tile_extent) %>% 
       sf::st_as_sfc() %>% 
-      sf::st_sfc(crs = sf::st_crs(tile_loss)) %>% 
+      sf::st_sfc(crs = sf::st_crs(tile)) %>% 
       sf::st_sf()
     
     # --------------------------------------------------------------------------------------
-    # Create 30 sec grid for sub tile 
-    sub_tile_grid <- raster::crop(grid_30sec, y = sub_tile_bbox) 
-    sub_tile_grid <- raster::stack(c(sub_tile_grid, 
+    # get 30 sec grid for sub tile 
+    sub_tile_grid <- raster::crop(grid_30sec, y = sub_tile_bbox)
+                       
+    sub_tile_grid <- raster::stack(c(sub_tile_grid,
                                      lapply(sf_list[c("ecoregion")], fasterize::fasterize, raster = raster::raster(sub_tile_grid), field = "attr", fun = "last")))
     
     layer_names <- names(sub_tile_grid)
@@ -73,74 +73,58 @@ build_30sec_grid <- function(job_id, id_hansen, area, year, grid_30sec, sf_list,
       return(NULL)
     }
         
-    # Get sub tile data 
-    velox_loss <- raster::crop(tile_loss, sub_tile_extent) %>% 
+    # Aggregate forest area 2000 to 30sec grid 
+    forest_2000 <- raster::subset(tile, c("area", "treecover2000")) %>% 
+      raster::crop(sub_tile_extent) %>% 
       velox::velox()
-    
-    velox_2000 <- raster::crop(tile_2000, sub_tile_extent) %>% 
-      velox::velox()
-    
-    # Aggregate values to 30sec grid 
-    r_values_loss <- velox_loss$extract(sp = sub_tile_grid, df = TRUE) %>% 
+      
+    forest_2000 <- forest_2000$extract(sp = sub_tile_grid, df = TRUE) %>% 
       tibble::as_tibble() %>% 
-      dplyr::rename_all(list(~make.names(c("id", names(tile_loss))))) 
-    
-    r_values_2000 <- velox_loss$extract(sp = sub_tile_grid, df = TRUE) %>% 
-      tibble::as_tibble() %>% 
-      dplyr::rename_all(list(~make.names(c("id", names(tile_2000))))) 
-    
-    forest_2000 <- r_values_2000 %>% 
-      dplyr::filter(id == 1429) %>% 
+      dplyr::rename_all(list(~make.names(c("id", "area", "treecover2000")))) %>% 
       dplyr::group_by(id) %>% 
       dplyr::summarise(area_2000 = sum(as.numeric(area) * as.numeric(treecover2000) / 100, na.rm = TRUE)) 
-  
-    forest_loss <- r_values_loss %>%  
-      dplyr::filter(id == 1429) %>% 
-      dplyr::filter(year != 0) %>% 
-      dplyr::group_by(id, year) %>% 
-      dplyr::summarise(area_loss = sum(as.numeric(area) * as.numeric(treecover2000) / 100, na.rm = TRUE)) %>% 
-      dplyr::arrange(id, year) %>% 
-      dplyr::mutate(accumulated_loss = cumsum(area_loss))
+    
+    velox_tile <- raster::crop(tile, sub_tile_extent) %>% 
+      velox::velox() 
 
-    forest_loss
-    
-      # dplyr::rename_all(list(~make.names(c("id", names(tile))))) %>%
-      # dplyr::filter(!near(treecover2000, 0)) %>% 
-      # dplyr::left_join(sub_tile_grid, by = c("id" = "id")) %>%
-      # dplyr::transmute(id_grid = as.character(id_grid),
-      #                  year = as.integer(year + 2000), 
-      #                  ecoregion = as.integer(ecoregion),
-      #                  ecoregion = ifelse(is.na(ecoregion), 9999, ecoregion),          # Ecoregions NA to 9999
-      #                  protected = ifelse(as.integer(protected) <= year, TRUE, FALSE), # Check if deforestation happens after the status of protected
-      #                  protected = !is.na(protected),
-      #                  area = as.numeric(area) * (as.numeric(treecover2000) / 100)) %>% 
-      # dplyr::group_by(id_grid, year, ecoregion, protected) %>%
-      # dplyr::summarise(area = sum(area, na.rm = TRUE)) %>% 
-      # dplyr::ungroup()
-    
-    # Calculate forest cover and forest loss time series 
-    forest_loss_area <- r_values %>% 
-      dplyr::filter(year == 2000) %>% 
-      dplyr::rename(area_2000 = area) %>% 
-      dplyr::select(-year) %>% 
-      dplyr::right_join(r_values, by = c("id_grid" = "id_grid", "ecoregion" = "ecoregion", "protected" = "protected")) %>%  
-      dplyr::mutate(area_loss = ifelse(year == 2000, 0, area)) %>% 
-      dplyr::group_by(id_grid, ecoregion, protected) %>% 
-      dplyr::arrange(id_grid, year, ecoregion, protected) %>% 
-      dplyr::mutate(accumulated_loss = cumsum(area_loss)) %>% 
-      dplyr::mutate(area_forest = area_2000 - accumulated_loss) %>% 
-      dplyr::select(-area_2000, -area) %>% 
-      dplyr::ungroup()
+    forest_timeseries <- velox_tile$extract(sp = sub_tile_grid, df = TRUE) %>% 
+      tibble::as_tibble() %>% 
+      dplyr::rename_all(list(~make.names(c("id", names(tile))))) %>% 
+      dplyr::mutate(area = as.numeric(area) * as.numeric(treecover2000) / 100) %>% 
+      dplyr::group_by(id, year) %>% 
+      dplyr::summarise(area_loss = sum(area, na.rm = TRUE)) %>% 
+      dplyr::ungroup() %>% 
+      dplyr::mutate(area_loss = ifelse(year == 0, 0, area_loss)) %>% 
+      tidyr::complete(year = full_seq(year, 1), nesting(id), fill = list(area_loss = 0)) %>% 
+      dplyr::group_by(id) %>% 
+      dplyr::arrange(year) %>% 
+      dplyr::mutate(accumulated_loss = c(0, cumsum(area_loss[year != 0]))) %>% 
+      dplyr::ungroup() %>% 
+      dplyr::left_join(forest_2000, by = c("id" = "id")) %>% 
+      dplyr::mutate(area_forest = ifelse(year == 0, area_2000, area_2000 - accumulated_loss), year = year + 2000) %>% 
+      dplyr::select(-area_2000)
+      
+    # total forest areas 
+    forest <- forest_timeseries %>% 
+      dplyr::select(-area_loss) %>% 
+      dplyr::filter(year %in% c(2000, 2017)) %>% 
+      dplyr::group_by(id) %>% 
+      dplyr::summarise(area_forest_2000 = area_forest[year == 2000], 
+                       area_accumulated_forest_loss = accumulated_loss[year == 2017])
     
     # Replace id with global id_grid
+    forest_timeseries <- sub_tile_grid %>% 
+      dplyr::select(id, id_grid) %>% 
+      dplyr::right_join(forest_timeseries, by = c("id" = "id")) %>% 
+      dplyr::select(-id)
+    
     sub_tile_grid <- sub_tile_grid %>% 
-      dplyr::select(id = id_grid, elevation)
+      dplyr::left_join(forest, by = c("id", "id")) %>% 
+      dplyr::select(-id) 
     
     ### pfusch - replace with DB connection  
-    #grid_fname <- paste0(output_path, "/", id_gtopo, "_", id_hansen, "_", b, ".shp")
-    #data_fname <- paste0(output_path, "/", id_gtopo, "_", id_hansen, "_", b, ".csv")
-    sf::st_write(sub_tile_grid, dsn = grid_fname, factorsAsCharacter = TRUE)
-    readr::write_csv(forest_loss_area, path = data_fname)
+    sf::st_write(sub_tile_grid, dsn = grid_fname, factorsAsCharacter = TRUE, delete_dsn = TRUE)
+    readr::write_csv(forest_timeseries, path = data_fname)
     
     # cat(paste0("\nTile ", id_hansen, " done! ", capture.output(Sys.time() - start_time)), file = log_file, append = TRUE)
     cat(paste0("\nTile ", id_hansen, " subtile ", b, " done! ", capture.output(Sys.time() - start_time)))
@@ -153,3 +137,5 @@ build_30sec_grid <- function(job_id, id_hansen, area, year, grid_30sec, sf_list,
   return(TRUE)
   
 }
+
+

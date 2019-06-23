@@ -1,5 +1,5 @@
 library(tidyverse)
-library(magrittr)
+library(gdalUtils)
 library(raster)
 raster::rasterOptions(tmpdir = "./raster_tmp/")
 
@@ -14,46 +14,55 @@ fineprint_grid_30sec_path <- path.expand(paste0(data_path, "/fineprint_grid_30se
 dir.create(fineprint_grid_30sec_path, showWarnings = FALSE, recursive = TRUE)
 
 # --------------------------------------------------------------------------------------
-# get 30sec grid template 
-template_30sec_grid <- path.expand(paste0(data_path, "/rstudio/sedac-2019/population_density/2000/v4-11-05/gpw_v4_population_density_rev11_2000_30_sec.tif")) %>% 
-  raster::brick() %>% 
-  raster::brick(nl = 1)
-
-# # --------------------------------------------------------------------------------------
-# # elevation 
-# elevation <- path.expand(paste0(data_path, "/rstudio/amatulli-etal/topographic_variables/2018/dl_2019-07/elevation_1KMmn_GMTEDmn.tif")) %>% 
-#   raster::brick()
-# names(elevation) <- "elevation"
-# raster::writeRaster(x = elevation, filename = paste0(fineprint_grid_30sec_path, "/elevation.tif"))
-# 
-# # --------------------------------------------------------------------------------------
-# # slope 
-# slope <- path.expand(paste0(data_path, "/rstudio/amatulli-etal/topographic_variables/2018/dl_2019-07/slope_1KMmn_GMTEDmn.tif")) %>% 
-#   raster::brick()
-# names(slope) <- "slope"
-# raster::writeRaster(x = slope, filename = paste0(fineprint_grid_30sec_path, "/slope.tif"))
+# get 30sec grid template from gpw population 
+if(!file.exists(paste0(fineprint_grid_30sec_path, "/template_grid_30sec.tif"))){
+  path.expand(paste0(data_path, "/rstudio/sedac-2019/population_density/2000/v4-11-05/gpw_v4_population_density_rev11_2000_30_sec.tif")) %>% 
+    raster::brick() %>% 
+    raster::brick(nl = 1) %>% 
+    raster::writeRaster(filename = paste0(fineprint_grid_30sec_path, "/template_grid_30sec.tif"), overwrite = TRUE)  
+} 
+path_grid_30sec <- paste0(fineprint_grid_30sec_path, "/template_grid_30sec.tif")
+grid_30sec <- raster::stack(path_grid_30sec)
 
 # --------------------------------------------------------------------------------------
-# soilgrid 
-soilgrid <- path.expand(paste0(data_path, "/rstudio/soilgrids-2019/soil_classification_250m_taxnwrb/2017/dl_2019-05/soil_classification_250m_TAXNWRB.tif")) %>% 
-  raster::brick()
-names(soilgrid) <- "soilgrid"
-soilgrid <- raster::resample(x = soilgrid, y = template_30sec_grid, method = "ngb", 
-                             filename = paste0(fineprint_grid_30sec_path, "/soilgrid.tif"))
+# compress population density 
+gdalUtils::gdal_translate(src_dataset = path.expand(paste0(data_path, "/rstudio/sedac-2019/population_density/2000/v4-11-05/gpw_v4_population_density_rev11_2000_30_sec.tif")),
+                          dst_dataset = paste0(fineprint_grid_30sec_path, "/population_density_2000.tif"), 
+                          ot = "Float32", co = list("compress=LZW", "TILED=YES"), verbose = TRUE)
 
 # --------------------------------------------------------------------------------------
-# esa_cci_2000 
-esa_cci_2000 <- path.expand(paste0(data_path, "/rstudio/esa-cci/land-cover/2000/v2-0-7/esacci_lc_2000_v2-0-7.tif")) %>% 
-  raster::brick()
-names(esa_cci_2000) <- "esa_cci_2000"
-esa_cci_2000 <- raster::resample(x = esa_cci_2000, y = template_30sec_grid, method = "ngb", 
-                                 filename = paste0(fineprint_grid_30sec_path, "/esa_cci_2000.tif"))
+# resample soilgrid using majority 
+gdalUtils::gdalwarp(srcfile = path.expand(paste0(data_path, "/rstudio/soilgrids-2019/soil_classification_250m_taxnwrb/2017/dl_2019-05/soil_classification_250m_TAXNWRB.tif")), 
+                    dstfile = paste0(fineprint_grid_30sec_path, "/soilgrid.tif"),r = "mode", ot = "Int16", co = list("compress=LZW", "TILED=YES"),
+                    te = as.vector(raster::extent(grid_30sec))[c(1,3,2,4)], 
+                    te_srs = raster::projection(grid_30sec), 
+                    ts = c(ncol(grid_30sec), nrow(grid_30sec)), 
+                    verbose = TRUE, overwrite = TRUE)
 
 # --------------------------------------------------------------------------------------
-# pop_2000
-pop_2000 = path.expand(paste0(data_path, "/rstudio/sedac-2019/population_density/2000/v4-11-05/gpw_v4_population_density_rev11_2000_30_sec.tif")) %>% 
-  raster::brick()
-names(pop_2000) <- "pop_2000"
-pop_2000 <- raster::resample(x = pop_2000, y = template_30sec_grid, method = "ngb", 
-                             filename = paste0(fineprint_grid_30sec_path, "/pop_2000.tif"))
+# resample esa_cci_2000 using majority 
+gdalUtils::gdalwarp(srcfile = path.expand(paste0(data_path, "/rstudio/esa-cci/land-cover/2000/v2-0-7/esacci_lc_2000_v2-0-7.tif")), 
+                    dstfile = paste0(fineprint_grid_30sec_path, "/esa_cci_2000.tif"),r = "mode", ot = "Int16", co = list("compress=LZW", "TILED=YES"),
+                    te = as.vector(raster::extent(grid_30sec))[c(1,3,2,4)], 
+                    te_srs = raster::projection(grid_30sec), 
+                    ts = c(ncol(grid_30sec), nrow(grid_30sec)), 
+                    verbose = TRUE, overwrite = TRUE)
+
+# --------------------------------------------------------------------------------------
+# resample elevation using bilinear resampling 
+gdalUtils::gdalwarp(srcfile = path.expand(paste0(data_path, "/rstudio/amatulli-etal/topographic_variables/2018/dl_2019-07/elevation_1KMmn_GMTEDmn.tif")), 
+                    dstfile = paste0(fineprint_grid_30sec_path, "/elevation.tif"),r = "bilinear", ot = "Float32", co = list("compress=LZW", "TILED=YES"),
+                    te = as.vector(raster::extent(grid_30sec))[c(1,3,2,4)], 
+                    te_srs = raster::projection(grid_30sec), 
+                    ts = c(ncol(grid_30sec), nrow(grid_30sec)), 
+                    verbose = TRUE, overwrite = TRUE)
+
+# --------------------------------------------------------------------------------------
+# resample slope using bilinear resampling 
+gdalUtils::gdalwarp(srcfile = path.expand(paste0(data_path, "/rstudio/amatulli-etal/topographic_variables/2018/dl_2019-07/slope_1KMmn_GMTEDmn.tif")), 
+                    dstfile = paste0(fineprint_grid_30sec_path, "/slope.tif"),r = "bilinear", ot = "Float32", co = list("compress=LZW", "TILED=YES"),
+                    te = as.vector(raster::extent(grid_30sec))[c(1,3,2,4)], 
+                    te_srs = raster::projection(grid_30sec), 
+                    ts = c(ncol(grid_30sec), nrow(grid_30sec)), 
+                    verbose = TRUE, overwrite = TRUE)
 
