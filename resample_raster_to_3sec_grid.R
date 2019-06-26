@@ -131,7 +131,7 @@ dir.create(path = waterway_path, showWarnings = FALSE, recursive = TRUE)
 waterway_sf <- lapply(names(waterway_sf), function(f){
   waterway_sf[[f]] %>% 
     dplyr::transmute(waterway = 1) %>% 
-    sf::st_write(dsn = paste0(waterway_path, "/waterway_", f, ".gpkg"))
+    sf::st_write(dsn = paste0(waterway_path, "/waterway_", f, ".gpkg"), delete_dsn = TRUE)
 })
 
 highway_path <- path.expand(paste0(data_path, "/fineprint_grid_30sec/highway"))
@@ -139,11 +139,10 @@ dir.create(path = highway_path, showWarnings = FALSE, recursive = TRUE)
 highway_sf <- lapply(names(highway_sf), function(f){
   highway_sf[[f]] %>% 
     dplyr::transmute(highway = 1) %>% 
-    sf::st_write(dsn = paste0(highway_path, "/highway_", f, ".gpkg"))
+    sf::st_write(dsn = paste0(highway_path, "/highway_", f, ".gpkg"), delete_dsn = TRUE)
 })
 
 f_list <- c(dir(waterway_path, pattern = ".gpkg$", full.names = TRUE), dir(highway_path, pattern = ".gpkg$", full.names = TRUE))
-f_in <- f_list[2]
                  
 lapply(f_list, function(f_in){
   
@@ -155,14 +154,14 @@ lapply(f_list, function(f_in){
   # rasterize open street map 
   system.time(
     gdalUtils::gdal_rasterize(src_datasource = f_in, burn = 1, at = TRUE, a_nodata = NA,
-                              dst_filename = f_tmp, ot = "Byte", co = list("compress=LZW", "TILED=YES"),
+                              dst_filename = f_tmp_f, ot = "Byte", co = list("compress=LZW", "TILED=YES"),
                               te = as.vector(raster::extent(grid_30sec))[c(1,3,2,4)], 
                               ts = c(ncol(grid_30sec), nrow(grid_30sec)), 
                               verbose = TRUE))
   
   # calculate distance map 
   system.time(
-    system(paste0("gdal_proximity.py ", f_tmp," ", f_out, 
+    system(paste0("gdal_proximity.py ", f_tmp_f," ", f_tmp_d, 
                   " -values 1 -ot Float32 -co compress=LZW -co TILED=YES -nodata NA -maxdist 1000000")))
   
   # harmonize no-value to NA
@@ -170,6 +169,8 @@ lapply(f_list, function(f_in){
     clusterR(x = raster::stack(c(f_tmp_d, paste0(fineprint_grid_30sec_path, "/population_density_2000.tif"))), 
              fun = raster::overlay, arg = list(fun = function(x, y) ifelse(is.na(y), y, x)), 
              filename = f_out, options = c("COMPRESS=LZW", "TILED=YES"), datatype = "FLT4S", overwrite = TRUE))
+  
+  return(f_out)
   
 })
 
