@@ -2,6 +2,9 @@ library(tidyverse)
 library(gdalUtils)
 library(raster)
 library(magrittr)
+library(sf)
+library(parallel)
+
 raster::rasterOptions(tmpdir = "./raster_tmp/")
 raster::rasterOptions(progress = "text")
 
@@ -66,9 +69,9 @@ system.time(
 # harmonize no-value to NA
 system.time(
   clusterR(x = raster::stack(c("./raster_tmp/esa_cci_2000.tif", paste0(fineprint_grid_30sec_path, "/population_density_2000.tif"))), 
-  fun = raster::overlay, arg = list(fun = function(x, y) ifelse(is.na(y), y, x)), 
-  filename = paste0(fineprint_grid_30sec_path, "/esa_cci_2000.tif"), 
-  options = c("COMPRESS=LZW", "TILED=YES"), datatype = "INT1U", overwrite = TRUE))
+           fun = raster::overlay, arg = list(fun = function(x, y) ifelse(is.na(y), y, x)), 
+           filename = paste0(fineprint_grid_30sec_path, "/esa_cci_2000.tif"), 
+           options = c("COMPRESS=LZW", "TILED=YES"), datatype = "INT1U", overwrite = TRUE))
 
 # --------------------------------------------------------------------------------------
 # resample elevation using bilinear resampling 
@@ -91,7 +94,7 @@ system.time(
 # resample slope using bilinear resampling 
 system.time(
   gdalUtils::gdalwarp(srcfile = path.expand(paste0(data_path, "/rstudio/amatulli-etal/topographic_variables/2018/dl_2019-07/slope_1KMmn_GMTEDmn.tif")), 
-                      dstfile = "./raster_tmp/slope.tif",r = "bilinear", ot = "Float32", co = list("compress=LZW", "TILED=YES"),
+                      dstfile = "./raster_tmp/slope.tif", r = "bilinear", ot = "Float32", co = list("compress=LZW", "TILED=YES"),
                       te = as.vector(raster::extent(grid_30sec))[c(1,3,2,4)], 
                       te_srs = raster::projection(grid_30sec), 
                       ts = c(ncol(grid_30sec), nrow(grid_30sec)), 
@@ -105,5 +108,74 @@ system.time(
            options = c("COMPRESS=LZW", "TILED=YES"), datatype = "FLT4S", overwrite = TRUE))
 
 # --------------------------------------------------------------------------------------
+# create 30sec grid with distance to roads
+osm_tiles <- lapply(dir(path.expand(paste0(data_path, "/openstreetmap/infrastructure/2019/dl_2019-05")), pattern = "gpkg$", full.names = TRUE), 
+                    FUN = sf::st_read, 
+                    query = "SELECT highway, waterway, geom AS geometry FROM lines WHERE highway IS NOT NULL OR waterway IS NOT NULL")
+
+# subset open street map categories 
+waterway_categories <- c("river", "canal")
+names(waterway_categories) <- waterway_categories
+highway_categories <- c("primary", "motorway", "secondary", "trunk")
+names(highway_categories) <- highway_categories
+waterway <- lapply(osm_tiles, dplyr::filter, waterway %in% waterway_categories)
+highway  <- lapply(osm_tiles, dplyr::filter, highway %in% highway_categories)
+
+# split data into categories 
+waterway_sf <- lapply(waterway_categories, FUN = function(f) do.call("rbind", parallel::mclapply(waterway, mc.cores = 5, dplyr::filter, waterway %in% f)))
+highway_sf <- lapply(highway_categories, FUN = function(f) do.call("rbind", parallel::mclapply(highway, mc.cores = 5, dplyr::filter, highway %in% f)))
+
+# write ti file split data into categories 
+waterway_path <- path.expand(paste0(data_path, "/fineprint_grid_30sec/waterway"))
+dir.create(path = waterway_path, showWarnings = FALSE, recursive = TRUE)
+waterway_sf <- lapply(names(waterway_sf), function(f){
+  waterway_sf[[f]] %>% 
+    dplyr::transmute(waterway = 1) %>% 
+    sf::st_write(dsn = paste0(waterway_path, "/waterway_", f, ".gpkg"))
+})
+
+highway_path <- path.expand(paste0(data_path, "/fineprint_grid_30sec/highway"))
+dir.create(path = highway_path, showWarnings = FALSE, recursive = TRUE)
+highway_sf <- lapply(names(highway_sf), function(f){
+  highway_sf[[f]] %>% 
+    dplyr::transmute(highway = 1) %>% 
+    sf::st_write(dsn = paste0(highway_path, "/highway_", f, ".gpkg"))
+})
+
+f_list <- c(dir(waterway_path, pattern = ".gpkg$", full.names = TRUE), dir(highway_path, pattern = ".gpkg$", full.names = TRUE))
+f_in <- f_list[2]
+                 
+lapply(f_list, function(f_in){
+  
+  a <- ifelse(stringr::str_detect(basename(f_in), "highway"), "highway", "waterway")
+  f_tmp_f <- paste0("./raster_tmp/field_", stringr::str_replace_all(basename(f_in), ".gpkg", ".tif"))
+  f_tmp_d <- paste0("./raster_tmp/dist_", stringr::str_replace_all(basename(f_in), ".gpkg", ".tif"))
+  f_out <- paste0(data_path, "/fineprint_grid_30sec/distance_",  stringr::str_replace_all(basename(f_in), ".gpkg", ".tif"))
+  
+  # rasterize open street map 
+  system.time(
+    gdalUtils::gdal_rasterize(src_datasource = f_in, burn = 1, at = TRUE, a_nodata = NA,
+                              dst_filename = f_tmp, ot = "Byte", co = list("compress=LZW", "TILED=YES"),
+                              te = as.vector(raster::extent(grid_30sec))[c(1,3,2,4)], 
+                              ts = c(ncol(grid_30sec), nrow(grid_30sec)), 
+                              verbose = TRUE))
+  
+  # calculate distance map 
+  system.time(
+    system(paste0("gdal_proximity.py ", f_tmp," ", f_out, 
+                  " -values 1 -ot Float32 -co compress=LZW -co TILED=YES -nodata NA -maxdist 1000000")))
+  
+  # harmonize no-value to NA
+  system.time(
+    clusterR(x = raster::stack(c(f_tmp_d, paste0(fineprint_grid_30sec_path, "/population_density_2000.tif"))), 
+             fun = raster::overlay, arg = list(fun = function(x, y) ifelse(is.na(y), y, x)), 
+             filename = f_out, options = c("COMPRESS=LZW", "TILED=YES"), datatype = "FLT4S", overwrite = TRUE))
+  
+})
+
+# --------------------------------------------------------------------------------------
 # stop raster cluster 
 raster::endCluster()
+
+sapply(dir("./raster_tmp", full.names = TRUE), file.remove)
+
