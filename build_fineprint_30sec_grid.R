@@ -25,12 +25,26 @@ elevation <- path.expand(paste0(fineprint_grid_30sec_path, "/elevation.tif"))
 slope <- path.expand(paste0(fineprint_grid_30sec_path, "/slope.tif"))
 soilgrid <- path.expand(paste0(fineprint_grid_30sec_path, "/soilgrid.tif"))
 esa_cci_2000 <- path.expand(paste0(fineprint_grid_30sec_path, "/esa_cci_2000.tif"))
+distance_waterway_canal <- path.expand(paste0(fineprint_grid_30sec_path, "/distance_waterway_canal.tif"))
+distance_waterway_river <- path.expand(paste0(fineprint_grid_30sec_path, "/distance_waterway_river.tif"))
+distance_highway_primary <- path.expand(paste0(fineprint_grid_30sec_path, "/distance_highway_primary.tif"))
+distance_highway_motorway <- path.expand(paste0(fineprint_grid_30sec_path, "/distance_highway_motorway.tif"))
+distance_highway_secondary <- path.expand(paste0(fineprint_grid_30sec_path, "/distance_highway_secondary.tif"))
+distance_highway_trunk <- path.expand(paste0(fineprint_grid_30sec_path, "/distance_highway_trunk.tif"))
+distance_mine <- path.expand(paste0(fineprint_grid_30sec_path, "/distance_mine.tif"))
+distance_protected_area <- path.expand(paste0(fineprint_grid_30sec_path, "/distance_protected_areas.tif"))
 
 # --------------------------------------------------------------------------------------
 # get vector files 
-ecoregions <- path.expand(paste0(data_path, "/ecoregions/Ecoregions2017.shp"))
-protected_area <- path.expand(paste0(data_path, "/protected_areas/WDPA_Feb2019-shapefile-polygons.shp"))
-# TO ADD countries----- 
+mine_area <- paste0(data_path, "/mine_polygons/mine_polygons_v1r3.geojson")
+world_map <- path.expand(paste0(data_path, "/country_eurostat/2016/dl_2019_06_20/countries_polygon.geojson"))
+
+# --------------------------------------------------------------------------------------
+# 1. read/load vector files 
+sf_list = list(
+  mines     = sf::st_read(mine_area, query = "SELECT AREA AS attr FROM OGRGeoJSON"),
+  countries = sf::st_read(world_map, query = "SELECT ISO3_CODE AS attr FROM OGRGeoJSON")
+)
 
 # --------------------------------------------------------------------------------------
 # get path dir data sets 
@@ -38,11 +52,6 @@ osm_dir <- path.expand(paste0(data_path, "/openstreetmap/infrastructure/2019/dl_
 pixel_area_dir <- path.expand(paste0(data_path, "/hansen/pixel_area"))
 forest_loss_dir <- path.expand(paste0(data_path, "/hansen/lossyear"))
 treecover2000_dir <- path.expand(paste0(data_path, "/hansen/treecover2000"))
-
-# --------------------------------------------------------------------------------------
-# 1. Read/Load ecoregions and protected areas
-sf_list = list(ecoregion = sf::st_read(ecoregions, query = "SELECT ECO_ID AS attr FROM Ecoregions2017"), 
-               protected = sf::st_read(protected_area, query = "SELECT STATUS_YR AS attr FROM \"WDPA_Feb2019-shapefile-polygons\""))
 
 # --------------------------------------------------------------------------------------
 # 2. Get processing tiles 
@@ -68,7 +77,14 @@ processing_tiles <- processing_tiles %>%
                                                   slope = slope,
                                                   soilgrid = soilgrid,
                                                   esa_cci_2000 = esa_cci_2000,
-                                                  pop_2000 = pop_2000)))) %>% 
+                                                  pop_2000 = pop_2000, 
+                                                  distance_waterway_canal = distance_waterway_canal,
+                                                  distance_waterway_river = distance_waterway_river,
+                                                  distance_highway_primary = distance_highway_primary,
+                                                  distance_highway_motorway = distance_highway_motorway,
+                                                  distance_highway_secondary = distance_highway_secondary,
+                                                  distance_highway_trunk = distance_highway_trunk, 
+                                                  distance_mine = distance_mine)))) %>% 
   dplyr::mutate(grid_30sec = lapply(seq_along(area), FUN = function(i) raster::crop(grid_30sec[[i]], y = raster::extent(area[[i]])))) 
 
 # --------------------------------------------------------------------------------------
