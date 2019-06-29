@@ -21,7 +21,7 @@ if(!exists("data_path"))
 
 # --------------------------------------------------------------------------------------
 # set output file 
-fineprint_grid_30sec_path <- path.expand(paste0(data_path, "/fineprint_land_mask_grid_30sec"))
+fineprint_grid_30sec_path <- path.expand(paste0(data_path, "/fineprint_grid_30sec"))
 
 # --------------------------------------------------------------------------------------
 # get 30sec land mask template 
@@ -133,5 +133,4 @@ lapply(f_list, function(f_in){
 # --------------------------------------------------------------------------------------
 # clean tmp folder 
 raster::endCluster()
-sapply(dir("./raster_tmp", full.names = TRUE), unlink, recursive = FALSE)
 
