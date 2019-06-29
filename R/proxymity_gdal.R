@@ -19,20 +19,32 @@ proxymity_gdal <- function(src_file, dst_file, land_mask, field = NULL, fun = "l
                                fun = raster::overlay, args = list(fun = function(x, m) x * m), 
                                filename = f_tmp2, options = unlist(co), overwrite = TRUE, verbose = TRUE))
   
-  # calculate distance map
+  # project open street map to Equidistant Cylindrical (Plate Carrée)
   f_tmp3 <- raster::rasterTmpFile()
+  system.time(gdalUtils::gdalwarp(srcfile = f_tmp2, r = "near", 
+                                  dstfile = f_tmp3, t_srs = "+proj=eqc", co = list("compress=LZW", "TILED=YES"), 
+                                  verbose = TRUE, overwrite = TRUE))
+    
+  # calculate distance map
+  f_tmp4 <- raster::rasterTmpFile()
   system.time(
-    system(paste0("gdal_proximity.py ", f_tmp2," ", f_tmp3,
+    system(paste0("gdal_proximity.py ", f_tmp3," ", f_tmp4,
                   " -values 1 -ot Float32 -co compress=LZW -co TILED=YES -distunits GEO -nodata NA -maxdist 1000000")))
 
+  # resample raster back to longlat 
+  f_tmp5 <- raster::rasterTmpFile()
+  system.time(gdalUtils::gdalwarp(srcfile = f_tmp4, r = "bilinear", 
+                                  dstfile = f_tmp5, 
+                                  te = te_exten, 
+                                  ts = ts_col_row, 
+                                  t_srs = "+proj=longlat", 
+                                  co = list("compress=LZW", "TILED=YES"), 
+                                  verbose = TRUE, overwrite = TRUE))
+  
   # mask distance to protected area
   system.time(
-    parllel_land_mask(x = raster::stack(list(f_tmp3, land_mask)),
+    parllel_land_mask(x = raster::stack(list(f_tmp5, land_mask)),
                       dst_file = dst_file, co = co, overwrite = overwrite, verbose = verbose))
-
-  file.remove(f_tmp1)
-  file.remove(f_tmp2)
-  file.remove(f_tmp3)
 
   return(dst_file)
 
