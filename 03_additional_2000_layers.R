@@ -55,10 +55,15 @@ if(!file.exists(dst_urban_mask_2000) | !file.exists(dst_mine_mask_2000)){
                               ts = c(ncol(raster::raster(src_esa_cci_2000)), nrow(raster::raster(src_esa_cci_2000))), 
                               verbose = TRUE))
   
+  # create urban mask 2000
+  urban_mask <- raster::rasterTmpFile()
+  system.time(raster::clusterR(x = raster::raster(src_esa_cci_2000), fun = raster::overlay, args = list(fun = function(x) ifelse(x == 190, 1, NA)), 
+                               filename = urban_mask, options = c("compress=LZW", "TILED=YES"), overwrite = TRUE, verbose = TRUE))
+  
   # make mine urban mask for 2000 
   mine_urban_mask_2000 <- raster::rasterTmpFile()
-  system.time(raster::clusterR(x = raster::stack(c(x = src_esa_cci_2000, m = mine_mask)), 
-                               fun = raster::overlay, args = list(fun = function(x, m) ifelse(x == 190, as.numeric(is.na(m)), NA)), 
+  system.time(raster::clusterR(x = raster::stack(c(x = urban_mask, m = mine_mask)), 
+                               fun = raster::overlay, args = list(fun = function(x, m) ifelse(is.na(x), x, as.numeric(is.na(m)))), 
                                filename = mine_urban_mask_2000, options = c("compress=LZW", "TILED=YES"), overwrite = TRUE, verbose = TRUE))
   
   # resample mask mine urban 2000
