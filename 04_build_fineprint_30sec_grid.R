@@ -5,7 +5,7 @@ library(velox)
 library(fasterize)
 library(sf)
 library(parallel)
-source("./R/aggregate_forest_loss_to_30sec_grid.R")
+source("./R/build_forest_30sec_grid.R")
 raster::rasterOptions(tmpdir = "./raster_tmp/")
 
 # --------------------------------------------------------------------------------------
@@ -16,7 +16,7 @@ if(!exists("data_path"))
 # --------------------------------------------------------------------------------------
 # set output file 
 fineprint_grid_30sec_path <- path.expand(paste0(data_path, "/fineprint_grid_30sec"))
-dir.create(output_path, showWarnings = FALSE, recursive = TRUE)
+dir.create(fineprint_grid_30sec_path, showWarnings = FALSE, recursive = TRUE)
 
 # --------------------------------------------------------------------------------------
 # path to 30sec grid files 
@@ -33,22 +33,14 @@ distance_highway_secondary <- path.expand(paste0(fineprint_grid_30sec_path, "/di
 distance_highway_trunk <- path.expand(paste0(fineprint_grid_30sec_path, "/distance_highway_trunk.tif"))
 distance_mine <- path.expand(paste0(fineprint_grid_30sec_path, "/distance_mine.tif"))
 distance_protected_area <- path.expand(paste0(fineprint_grid_30sec_path, "/distance_protected_areas.tif"))
-
-# --------------------------------------------------------------------------------------
-# get vector files 
-mine_area <- paste0(data_path, "/mine_polygons/mine_polygons_v1r3.geojson")
-world_map <- path.expand(paste0(data_path, "/country_eurostat/2016/dl_2019_06_20/countries_polygon.geojson"))
-
-# --------------------------------------------------------------------------------------
-# 1. read/load vector files 
-sf_list = list(
-  mines     = sf::st_read(mine_area, query = "SELECT AREA AS attr FROM OGRGeoJSON"),
-  countries = sf::st_read(world_map, query = "SELECT ISO3_CODE AS attr FROM OGRGeoJSON")
-)
+distance_urban_2000 <- paste0(fineprint_grid_30sec_path, "/distance_urban_2000.tif")
+distance_mine_2000 <- paste0(fineprint_grid_30sec_path, "/distance_mine_2000.tif")
+accessibility_cities_2015 <- paste0(fineprint_grid_30sec_path, "/accessibility_to_cities_2015.tif")
+countries <- paste0(fineprint_grid_30sec_path, "/countries.tif")
+mine_polygons <- paste0(data_path, "/mine_polygons/mine_polygons_v1r3.geojson")
 
 # --------------------------------------------------------------------------------------
 # get path dir data sets 
-osm_dir <- path.expand(paste0(data_path, "/openstreetmap/infrastructure/2019/dl_2019-05"))
 pixel_area_dir <- path.expand(paste0(data_path, "/hansen/pixel_area"))
 forest_loss_dir <- path.expand(paste0(data_path, "/hansen/lossyear"))
 treecover2000_dir <- path.expand(paste0(data_path, "/hansen/treecover2000"))
@@ -77,15 +69,25 @@ processing_tiles <- processing_tiles %>%
                                                   slope = slope,
                                                   soilgrid = soilgrid,
                                                   esa_cci_2000 = esa_cci_2000,
-                                                  pop_2000 = pop_2000, 
+                                                  pop_2000 = pop_2000,
                                                   distance_waterway_canal = distance_waterway_canal,
                                                   distance_waterway_river = distance_waterway_river,
                                                   distance_highway_primary = distance_highway_primary,
                                                   distance_highway_motorway = distance_highway_motorway,
                                                   distance_highway_secondary = distance_highway_secondary,
                                                   distance_highway_trunk = distance_highway_trunk, 
-                                                  distance_mine = distance_mine)))) %>% 
-  dplyr::mutate(grid_30sec = lapply(seq_along(area), FUN = function(i) raster::crop(grid_30sec[[i]], y = raster::extent(area[[i]])))) 
+                                                  distance_mine = distance_mine,
+                                                  distance_urban_2000 = distance_urban_2000,
+                                                  distance_mine_2000 = distance_mine_2000,
+                                                  accessibility_cities_2015 = accessibility_cities_2015, 
+                                                  countries = countries)))) %>% 
+  dplyr::mutate(grid_30sec = lapply(seq_along(area), FUN = function(i) raster::crop(grid_30sec[[i]], y = raster::extent(area[[i]]))))
+
+for(i in seq_along(processing_tiles$grid_30sec)){
+  names(processing_tiles$grid_30sec[[i]]) <- c("elevation", "slope", "soilgrid", "esa_cci_2000", "pop_2000", "distance_waterway_canal", "distance_waterway_river", 
+                                               "distance_highway_primary", "distance_highway_motorway", "distance_highway_secondary", "distance_highway_trunk", 
+                                               "distance_mine", "distance_urban_2000", "distance_mine_2000", "accessibility_cities_2015", "countries")
+}
 
 # --------------------------------------------------------------------------------------
 # 4. Check tiles already processed 
@@ -99,7 +101,7 @@ tiles_aggregated_forest_loss <- processing_tiles %>%
   dplyr::mutate(out_file = purrr::pmap_chr(.l = list(job_id, id_hansen, area, year, 
                                                      treecover2000, grid_30sec), 
                                            .f = build_30sec_grid, 
-                                           sf_list = sf_list, 
+                                           mine_polygons = sf::st_read(mine_polygons), 
                                            output_path = fineprint_grid_30sec_path, 
                                            ncores = 1))
 

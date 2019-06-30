@@ -1,4 +1,4 @@
-build_forest_30sec_grid <- function(job_id, id_hansen, area, year, grid_30sec, sf_list, output_path, log_file = NULL, ncores = 1){
+build_forest_30sec_grid <- function(job_id, id_hansen, area, year, grid_30sec, sf_list, output_path, mine_polygons, log_file = NULL, ncores = 1){
   
   # job_id <- processing_tiles$job_id[[1]]
   # id_hansen <- processing_tiles$id_hansen[[1]]
@@ -7,7 +7,8 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, grid_30sec, s
   # treecover2000 <- processing_tiles$treecover2000[[1]]
   # grid_30sec <- processing_tiles$grid_30sec[[1]]
   # sf_list <- sf_list
-  # output_path <- fineprint_grid_30sec_path
+  # output_path <- paste0(fineprint_grid_30sec_path, "/test_processing")
+  # mine_polygons <- mine_polygons
   # ncores <- 1
   
   # --------------------------------------------------------------------------------------
@@ -29,7 +30,10 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, grid_30sec, s
   
   # --------------------------------------------------------------------------------------
   # files to write raster grid output 
-  fname_grid_tif <- paste0(output_path, "/", id_hansen, ".tif")
+  tile_dir <- paste0(output_path, "/", id_hansen) 
+  dir.create(tile_dir, showWarnings = FALSE, recursive = TRUE)
+  fname_forest_grid_tif <- paste0(tile_dir, "/forest_2000.tif")
+  fname_forest_loss_grid_tif <- paste0(tile_dir, "/forest_loss_total_2017.tif")
   
   # --------------------------------------------------------------------------------------
   #  block_values <- parallel::mclapply(1:r_blocks$n, mc.cores = ncores, function(b){
@@ -37,8 +41,8 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, grid_30sec, s
     
     # --------------------------------------------------------------------------------------
     # files to write grid data chunks output 
-    fname_grid_sf <- paste0(output_path, "/", id_hansen, "_", stringr::str_pad(string = b, width = 4, pad = "0"), ".geojson")
-    fname_forest_ts <- paste0(output_path, "/", id_hansen, "_", stringr::str_pad(string = b, width = 4, pad = "0"), ".csv")
+    fname_grid_sf <- paste0(tile_dir, "/", stringr::str_pad(string = b, width = 4, pad = "0"), "_grid.geojson")
+    fname_forest_ts <- paste0(tile_dir, "/", stringr::str_pad(string = b, width = 4, pad = "0"), "_timeseries.csv")
     
     if(file.exists(fname_grid_sf) && file.exists(fname_forest_ts)){
       return(TRUE)
@@ -50,6 +54,9 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, grid_30sec, s
     # --------------------------------------------------------------------------------------
     # Get sub tile extent 
     sub_tile_extent <- raster::extent(tile, r_blocks$row[b], r_blocks$row[b] + r_blocks$nrows[b] - 1, 1, ncol(tile))
+    # test_set <- mine_polygons %>% dplyr::filter(ECO_NAME == "Xingu-Tocantins-Araguaia moist forests") 
+    # sub_tile_extent <- st_bbox(test_set) %>% as.vector() %>% raster::extent()
+    
     sub_tile_bbox <- sf::st_bbox(sub_tile_extent) %>% 
       sf::st_as_sfc() %>% 
       sf::st_sfc(crs = sf::st_crs(tile)) %>% 
@@ -58,13 +65,10 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, grid_30sec, s
     # --------------------------------------------------------------------------------------
     # get 30 sec grid for sub tile 
     sub_tile_grid <- raster::crop(grid_30sec, y = sub_tile_bbox)
-                       
-    sub_tile_tbl <- raster::stack(c(sub_tile_grid,
-                                     lapply(sf_list[c("ecoregion")], fasterize::fasterize, raster = raster::raster(sub_tile_grid), field = "attr", fun = "last")))
     
-    layer_names <- names(sub_tile_tbl)
+    layer_names <- names(sub_tile_grid)
     
-    sub_tile_tbl <- sub_tile_tbl %>% 
+    sub_tile_tbl <- sub_tile_grid %>% 
       stars::st_as_stars() %>% 
       sf::st_as_sf(x, merge = FALSE, as_points = FALSE)
     
@@ -79,11 +83,6 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, grid_30sec, s
       return(NULL)
     }
     
-    # get country 
-    sub_tile_tbl <- sf::st_join(sub_tile_tbl, y = sf_list$countries, left = TRUE, join = sf::st_intersects, sparse = TRUE) %>% 
-      dplyr::distinct() %>% 
-      dplyr::rename(ISO3_CODE = attr)
-
     # --------------------------------------------------------------------------------------
     # aggregate forest area in 2000 to 30sec grid 
     forest_2000 <- raster::subset(tile, c("area", "treecover2000")) %>% 
@@ -118,6 +117,23 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, grid_30sec, s
       dplyr::mutate(area_forest = ifelse(year == 0, area_2000, area_2000 - accumulated_loss), year = year + 2000) %>% 
       dplyr::select(-area_2000)
       
+    # --------------------------------------------------------------------------------------
+    # get mine polygons intersecting grid 
+    mine_intersecting_grid <- mine_polygons %>% 
+      dplyr::filter(lengths(sf::st_intersects(., sub_tile_tbl, sparse = TRUE)) > 0)
+    
+    # --------------------------------------------------------------------------------------
+    # calculate forest loss within mine 
+    if(nrow(mine_intersecting_grid) > 0){
+      
+      id, id_grid
+      
+      forest_timeseries <- velox_tile$extract(sp = mine_intersecting_grid, df = TRUE) %>% 
+        tibble::as_tibble() %>% 
+        dplyr::rename_all(list(~make.names(c("id", names(tile))))) %>% 
+        dplyr::mutate(area = as.numeric(area) * as.numeric(treecover2000) / 100)
+    }
+    
     # --------------------------------------------------------------------------------------
     # calculate total forest area 
     forest <- forest_timeseries %>% 
