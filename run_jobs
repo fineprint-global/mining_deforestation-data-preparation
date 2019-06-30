@@ -20,7 +20,7 @@ R-g --vanilla <<-EOF
   print(job_id)
 
   # Run job 
-  source("./build_fineprint_30sec_grid.R")
+  source("./04_build_fineprint_30sec_grid.R")
 
 EOF
 

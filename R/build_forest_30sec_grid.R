@@ -1,4 +1,4 @@
-build_30sec_grid <- function(job_id, id_hansen, area, year, grid_30sec, sf_list, output_path, log_file = NULL, ncores = 1){
+build_forest_30sec_grid <- function(job_id, id_hansen, area, year, grid_30sec, sf_list, output_path, log_file = NULL, ncores = 1){
   
   # job_id <- processing_tiles$job_id[[1]]
   # id_hansen <- processing_tiles$id_hansen[[1]]
