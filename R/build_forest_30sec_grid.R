@@ -85,11 +85,11 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, grid_30sec, s
     
     # --------------------------------------------------------------------------------------
     # aggregate forest area in 2000 to 30sec grid 
-    forest_2000 <- raster::subset(tile, c("area", "treecover2000")) %>% 
+    forest_2000_velox <- raster::subset(tile, c("area", "treecover2000")) %>% 
       raster::crop(sub_tile_extent) %>% 
       velox::velox()
       
-    forest_2000 <- forest_2000$extract(sp = sub_tile_tbl, df = TRUE) %>% 
+    forest_2000 <- forest_2000_velox$extract(sp = sub_tile_tbl, df = TRUE) %>% 
       tibble::as_tibble() %>% 
       dplyr::rename_all(list(~make.names(c("id", "area", "treecover2000")))) %>% 
       dplyr::group_by(id) %>% 
@@ -120,18 +120,53 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, grid_30sec, s
     # --------------------------------------------------------------------------------------
     # get mine polygons intersecting grid 
     mine_intersecting_grid <- mine_polygons %>% 
-      dplyr::filter(lengths(sf::st_intersects(., sub_tile_tbl, sparse = TRUE)) > 0)
+      sf::st_transform(crs = "+proj=moll") %>% 
+      dplyr::filter(lengths(sf::st_intersects(., sf::st_transform(sub_tile_tbl, crs = "+proj=moll"), sparse = TRUE)) > 0)
     
     # --------------------------------------------------------------------------------------
     # calculate forest loss within mine 
     if(nrow(mine_intersecting_grid) > 0){
       
-      id, id_grid
+      # get intersecting grid cells 
+      grid_intersecting <- sub_tile_tbl %>% 
+        dplyr::select(id_grid) %>% 
+        sf::st_transform(crs = "+proj=moll") %>% 
+        dplyr::filter(lengths(sf::st_intersects(., mine_intersecting_grid, sparse = TRUE)) > 0)
       
-      forest_timeseries <- velox_tile$extract(sp = mine_intersecting_grid, df = TRUE) %>% 
+      # calculate mining area for mine intersection with grid cells 
+      mine_grid_intersection <- grid_intersecting %>% 
+        sf::st_intersection(sf::st_geometry(mine_intersecting_grid)) %>% 
+        sf::st_cast("POLYGON") %>% 
+        dplyr::mutate(area_mine = sf::st_area(geometry), id = dplyr::row_number())
+      
+      # calculate forest loss time series from direct mining within grid cells 
+      mine_forest_2000 <- forest_2000_velox$extract(sp = sf::st_transform(mine_grid_intersection, crs = "+proj=longlat"), df = TRUE) %>% 
+        tibble::as_tibble() %>% 
+        dplyr::rename_all(list(~make.names(c("id", "area", "treecover2000")))) %>% 
+        dplyr::group_by(id) %>% 
+        dplyr::summarise(area_2000 = sum(as.numeric(area) * as.numeric(treecover2000) / 100, na.rm = TRUE)) 
+      
+      mine_forest_loss_time_series <- velox_tile$extract(sp = sf::st_transform(mine_grid_intersection, crs = "+proj=longlat"), df = TRUE) %>%
         tibble::as_tibble() %>% 
         dplyr::rename_all(list(~make.names(c("id", names(tile))))) %>% 
-        dplyr::mutate(area = as.numeric(area) * as.numeric(treecover2000) / 100)
+        dplyr::mutate(area = as.numeric(area) * as.numeric(treecover2000) / 100) %>% 
+        dplyr::group_by(id, year) %>% 
+        dplyr::summarise(area_loss = sum(area, na.rm = TRUE)) %>% 
+        dplyr::ungroup() %>% 
+        dplyr::mutate(area_loss = ifelse(year == 0, 0, area_loss)) %>% 
+        tidyr::complete(year = full_seq(year, 1), nesting(id), fill = list(area_loss = 0)) %>% 
+        dplyr::group_by(id) %>% 
+        dplyr::arrange(year) %>% 
+        dplyr::mutate(accumulated_loss = c(0, cumsum(area_loss[year != 0]))) %>% 
+        dplyr::ungroup() %>% 
+        dplyr::left_join(forest_2000, by = c("id" = "id")) %>% 
+        dplyr::mutate(area_forest = ifelse(year == 0, area_2000, area_2000 - accumulated_loss), year = year + 2000) %>% 
+        dplyr::select(-area_2000)
+      
+      # TODO: save results to csv 
+      
+      # TODO: join mine area to grid cell results  
+      
     }
     
     # --------------------------------------------------------------------------------------
