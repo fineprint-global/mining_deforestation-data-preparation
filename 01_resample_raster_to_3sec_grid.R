@@ -36,6 +36,7 @@ src_esa_cci_2000 <- paste0(data_path, "/rstudio/esa-cci/land-cover/2000/v2-0-7/e
 src_elevation <- paste0(data_path, "/rstudio/amatulli-etal/topographic_variables/2018/dl_2019-07/elevation_1KMmn_GMTEDmn.tif")
 src_slope <- paste0(data_path, "/rstudio/amatulli-etal/topographic_variables/2018/dl_2019-07/slope_1KMmn_GMTEDmn.tif")
 src_mines <- paste0(data_path, "/mine_polygons/mine_polygons_v1r3.geojson")
+src_accessibility_to_cities_2015 <- paste0(data_path, "/rstudio/weiss-etal/accessibility_to_cities/2015/v1-0/accessibility_to_cities_2015_v1-0.tif")
 
 # --------------------------------------------------------------------------------------
 # destination data files 
@@ -48,6 +49,7 @@ dst_esa_cci_2000 <- paste0(fineprint_grid_30sec_path, "/esa_cci_2000.tif")
 dst_elevation <- paste0(fineprint_grid_30sec_path, "/elevation.tif")
 dst_slope <- paste0(fineprint_grid_30sec_path, "/slope.tif")
 dst_mines <- paste0(fineprint_grid_30sec_path, "/distance_mine.tif")
+dst_accessibility_to_cities_2015 <- paste0(fineprint_grid_30sec_path, "/accessibility_to_cities_2015.tif")
 
 # --------------------------------------------------------------------------------------
 # get 30sec grid template parameter from gpw population and ecoregions 
@@ -152,6 +154,17 @@ if(!file.exists(dst_mines)){
                  co = list("compress=LZW", "TILED=YES"), verbose = TRUE, overwrite = TRUE)
 }
 # raster::raster(dst_mines) %>% plot()
+
+# --------------------------------------------------------------------------------------
+# resample elevation to 30sec 
+if(!file.exists(dst_accessibility_to_cities_2015)){
+  resample_gdal(src_file = src_accessibility_to_cities_2015,
+                dst_file = dst_accessibility_to_cities_2015, 
+                land_mask = dst_land_mask, 
+                r = "bilinear", co = list("compress=LZW", "TILED=YES"),
+                overwrite = TRUE, verbose = TRUE) 
+}
+# raster::raster(dst_accessibility_to_cities_2015) %>% plot()
 
 # --------------------------------------------------------------------------------------
 # clean tmp folder 
