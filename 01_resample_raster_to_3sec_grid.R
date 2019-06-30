@@ -37,6 +37,7 @@ src_elevation <- paste0(data_path, "/rstudio/amatulli-etal/topographic_variables
 src_slope <- paste0(data_path, "/rstudio/amatulli-etal/topographic_variables/2018/dl_2019-07/slope_1KMmn_GMTEDmn.tif")
 src_mines <- paste0(data_path, "/mine_polygons/mine_polygons_v1r3.geojson")
 src_accessibility_to_cities_2015 <- paste0(data_path, "/rstudio/weiss-etal/accessibility_to_cities/2015/v1-0/accessibility_to_cities_2015_v1-0.tif")
+src_countries <- path.expand(paste0(data_path, "/country_eurostat/2016/dl_2019_06_20/countries_polygon.geojson"))
 
 # --------------------------------------------------------------------------------------
 # destination data files 
@@ -50,6 +51,8 @@ dst_elevation <- paste0(fineprint_grid_30sec_path, "/elevation.tif")
 dst_slope <- paste0(fineprint_grid_30sec_path, "/slope.tif")
 dst_mines <- paste0(fineprint_grid_30sec_path, "/distance_mine.tif")
 dst_accessibility_to_cities_2015 <- paste0(fineprint_grid_30sec_path, "/accessibility_to_cities_2015.tif")
+dst_countries <- paste0(fineprint_grid_30sec_path, "/countries.tif")
+dst_countries_concordance <- paste0(fineprint_grid_30sec_path, "/countries_concordance.csv")
 
 # --------------------------------------------------------------------------------------
 # get 30sec grid template parameter from gpw population and ecoregions 
@@ -83,6 +86,36 @@ if(!file.exists(dst_ecoregions)){
   
 }
 # raster::raster(dst_ecoregions) %>% plot()
+
+
+# --------------------------------------------------------------------------------------
+# build 30sec grid for ecoregions 
+if(!file.exists(dst_countries)){
+  
+  # read country shape 
+  countries <- sf::st_read(dsn = src_countries, query = "SELECT ISO3_CODE, COUNTRY_NAME_EN FROM OGRGeoJSON")
+  
+  # create concordance table 
+  countries_concordance <- countries %>% 
+    sf::st_drop_geometry() %>% 
+    dplyr::distinct() %>% 
+    dplyr::mutate(RASTER_VALUE = dplyr::row_number())
+  
+  readr::write_csv(countries_concordance, dst_countries_concordance)
+  
+  # save country raster values 
+  tmp_countries <- "./raster_tmp/tmp_country_raster_values.gpkg"
+  countries %>% 
+    left_join(dplyr::select(countries_concordance, ISO3_CODE, RASTER_VALUE), by = c("ISO3_CODE" = "ISO3_CODE")) %>% 
+    dplyr::select(RASTER_VALUE) %>% 
+    sf::st_write(dsn = tmp_countries, delete_dsn = TRUE)
+  
+  # rasterize countries 
+  system.time(write_fasterize(sf = tmp_countries, raster = grid_30sec, filename = dst_countries, 
+                              field = "RASTER_VALUE", fun = "last", background = NA, overwrite = TRUE))
+  
+}
+# raster::raster(dst_countries) %>% plot()
 
 # --------------------------------------------------------------------------------------
 # population density 
@@ -165,6 +198,7 @@ if(!file.exists(dst_accessibility_to_cities_2015)){
                 overwrite = TRUE, verbose = TRUE) 
 }
 # raster::raster(dst_accessibility_to_cities_2015) %>% plot()
+
 
 # --------------------------------------------------------------------------------------
 # clean tmp folder 
