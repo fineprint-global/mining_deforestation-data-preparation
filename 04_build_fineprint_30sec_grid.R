@@ -33,8 +33,8 @@ distance_highway_secondary <- path.expand(paste0(fineprint_grid_30sec_path, "/di
 distance_highway_trunk <- path.expand(paste0(fineprint_grid_30sec_path, "/distance_highway_trunk.tif"))
 distance_mine <- path.expand(paste0(fineprint_grid_30sec_path, "/distance_mine.tif"))
 distance_protected_area <- path.expand(paste0(fineprint_grid_30sec_path, "/distance_protected_areas.tif"))
-distance_urban_2000 <- paste0(fineprint_grid_30sec_path, "/distance_urban_2000.tif")
-distance_mine_2000 <- paste0(fineprint_grid_30sec_path, "/distance_mine_2000.tif")
+# distance_urban_2000 <- paste0(fineprint_grid_30sec_path, "/distance_urban_2000.tif")
+# distance_mine_2000 <- paste0(fineprint_grid_30sec_path, "/distance_mine_2000.tif")
 accessibility_cities_2015 <- paste0(fineprint_grid_30sec_path, "/accessibility_to_cities_2015.tif")
 countries <- paste0(fineprint_grid_30sec_path, "/countries.tif")
 mine_polygons <- paste0(data_path, "/mine_polygons/mine_polygons_v1r3.geojson")
@@ -77,8 +77,8 @@ processing_tiles <- processing_tiles %>%
                                                   distance_highway_secondary = distance_highway_secondary,
                                                   distance_highway_trunk = distance_highway_trunk, 
                                                   distance_mine = distance_mine,
-                                                  distance_urban_2000 = distance_urban_2000,
-                                                  distance_mine_2000 = distance_mine_2000,
+                                                  # distance_urban_2000 = distance_urban_2000,
+                                                  # distance_mine_2000 = distance_mine_2000,
                                                   accessibility_cities_2015 = accessibility_cities_2015, 
                                                   countries = countries)))) %>% 
   dplyr::mutate(grid_30sec = lapply(seq_along(area), FUN = function(i) raster::crop(grid_30sec[[i]], y = raster::extent(area[[i]]))))
@@ -86,7 +86,7 @@ processing_tiles <- processing_tiles %>%
 for(i in seq_along(processing_tiles$grid_30sec)){
   names(processing_tiles$grid_30sec[[i]]) <- c("elevation", "slope", "soilgrid", "esa_cci_2000", "pop_2000", "distance_waterway_canal", "distance_waterway_river", 
                                                "distance_highway_primary", "distance_highway_motorway", "distance_highway_secondary", "distance_highway_trunk", 
-                                               "distance_mine", "distance_urban_2000", "distance_mine_2000", "accessibility_cities_2015", "countries")
+                                               "distance_mine", "accessibility_cities_2015", "countries")
 }
 
 # --------------------------------------------------------------------------------------
