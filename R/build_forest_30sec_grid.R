@@ -1,5 +1,5 @@
 build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000, grid_30sec, output_path, mine_polygons, log_file = NULL, ncores = 1){
-  
+
   # job_id <- processing_tiles$job_id[[1]]
   # id_hansen <- processing_tiles$id_hansen[[1]]
   # area <- processing_tiles$area[[1]]
@@ -13,6 +13,7 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000
   # --------------------------------------------------------------------------------------
   # stack raster files 
   tile <- raster::stack(c(area = area, year = year, treecover2000 = treecover2000))
+  tile_30sec <- raster::crop(raster::raster(grid_30sec), raster::extent(tile))
   names(tile) <- c("area", "year", "treecover2000")
   
   # --------------------------------------------------------------------------------------
@@ -31,11 +32,11 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000
   # start files to write raster grid output 
   tile_dir <- paste0(output_path, "/", id_hansen)
   dir.create(tile_dir, showWarnings = FALSE, recursive = TRUE)
-  r_forest_area <- raster::writeStart(raster::raster(grid_30sec), filename = paste0(tile_dir, "/forest_area_2000.tif"), overwrite = TRUE)
-  r_forest_area_loss <- raster::writeStart(raster::raster(grid_30sec), filename = paste0(tile_dir, "/forest_area_loss_2017.tif"), overwrite = TRUE)
-  r_mine_lease_area <- raster::writeStart(raster::raster(grid_30sec), filename = paste0(tile_dir, "/mine_lease_area.tif"), overwrite = TRUE)
-  r_mine_lease_forest_2000 <- raster::writeStart(raster::raster(grid_30sec), filename = paste0(tile_dir, "/mine_lease_forest_2000.tif"), overwrite = TRUE)
-  r_mine_lease_forest_loss <- raster::writeStart(raster::raster(grid_30sec), filename = paste0(tile_dir, "/mine_lease_forest_loss.tif"), overwrite = TRUE)
+  r_forest_area <- raster::writeStart(raster::raster(tile_30sec), filename = paste0(tile_dir, "/forest_area_2000.tif"), overwrite = TRUE)
+  r_forest_area_loss <- raster::writeStart(raster::raster(tile_30sec), filename = paste0(tile_dir, "/forest_area_loss_2017.tif"), overwrite = TRUE)
+  r_mine_lease_area <- raster::writeStart(raster::raster(tile_30sec), filename = paste0(tile_dir, "/mine_lease_area.tif"), overwrite = TRUE)
+  r_mine_lease_forest_2000 <- raster::writeStart(raster::raster(tile_30sec), filename = paste0(tile_dir, "/mine_lease_forest_2000.tif"), overwrite = TRUE)
+  r_mine_lease_forest_loss <- raster::writeStart(raster::raster(tile_30sec), filename = paste0(tile_dir, "/mine_lease_forest_loss.tif"), overwrite = TRUE)
   
   # --------------------------------------------------------------------------------------
   #  block_values <- parallel::mclapply(1:r_blocks$n, mc.cores = ncores, function(b){
@@ -61,8 +62,7 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000
     
     # --------------------------------------------------------------------------------------
     # project raster to equal-area 
-    row_start <- raster::rowFromCell(grid_30sec, raster::cellsFromExtent(grid_30sec, sub_tile_extent))[1]
-    
+    row_start <- raster::rowFromCell(tile_30sec, raster::cellsFromExtent(tile_30sec, sub_tile_extent))[1]
     sub_tile_grid <- raster::crop(grid_30sec, y = sub_tile_extent) 
     layer_names <- names(sub_tile_grid)
     
@@ -169,7 +169,7 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000
       # calculate forest loss time series from direct mining within grid cells 
       mine_forest_2000 <- forest_2000_velox$extract(sp = sf::st_transform(mine_grid_intersection, crs = "+proj=longlat"), df = TRUE) 
       
-      if(class(mine_forest_2000) == "data.frame"){
+      if(class(mine_forest_2000) == "data.frame" & nrow(mine_forest_2000) > 0){
         
         mine_forest_2000 <- mine_forest_2000 %>% 
           tibble::as_tibble() %>% 
@@ -243,7 +243,7 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000
     
     # --------------------------------------------------------------------------------------
     # write results to file 
-    readr::write_csv(out_forest_timeseries, path = fname_forest_ts)
+    # readr::write_csv(out_forest_timeseries, path = fname_forest_ts)
     out_sub_tile_tbl %>% 
       dplyr::select(-id) %>% 
       sf::st_write(dsn = fname_grid_sf, factorsAsCharacter = TRUE, delete_dsn = TRUE)
