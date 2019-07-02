@@ -81,14 +81,7 @@ processing_tiles <- processing_tiles %>%
                                                   # distance_urban_2000 = distance_urban_2000,
                                                   # distance_mine_2000 = distance_mine_2000,
                                                   accessibility_cities_2015 = accessibility_cities_2015, 
-                                                  countries = countries)))) %>% 
-  dplyr::mutate(grid_30sec = lapply(seq_along(area), FUN = function(i) raster::crop(grid_30sec[[i]], y = raster::extent(area[[i]]))))
-
-for(i in seq_along(processing_tiles$grid_30sec)){
-  names(processing_tiles$grid_30sec[[i]]) <- c("elevation", "slope", "soilgrid", "esa_cci_2000", "pop_2000", "distance_waterway_canal", "distance_waterway_river", 
-                                               "distance_highway_primary", "distance_highway_motorway", "distance_highway_secondary", "distance_highway_trunk", 
-                                               "distance_mine", "accessibility_cities_2015", "countries")
-}
+                                                  countries = countries)))) 
 
 # --------------------------------------------------------------------------------------
 # 4. Check tiles already processed 
