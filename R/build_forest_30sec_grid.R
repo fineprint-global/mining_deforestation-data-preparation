@@ -1,4 +1,4 @@
-build_forest_30sec_grid <- function(job_id, id_hansen, area, year, grid_30sec, sf_list, output_path, mine_polygons, log_file = NULL, ncores = 1){
+build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000, grid_30sec, output_path, mine_polygons, log_file = NULL, ncores = 1){
   
   # job_id <- processing_tiles$job_id[[1]]
   # id_hansen <- processing_tiles$id_hansen[[1]]
@@ -18,7 +18,7 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, grid_30sec, s
   # --------------------------------------------------------------------------------------
   # Split processing blocks
   r_blocks <- raster::blockSize(tile, minrows = 160)
-  output_path <- paste0(output_path, "/forest_timeseries")
+  output_path <- paste0(output_path, "/timeseries")
   dir.create(output_path, showWarnings = FALSE, recursive = TRUE)
   
   # --------------------------------------------------------------------------------------
@@ -41,6 +41,9 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, grid_30sec, s
   #  block_values <- parallel::mclapply(1:r_blocks$n, mc.cores = ncores, function(b){
   block_values <- lapply(1:r_blocks$n, function(b){
     
+    # cat(paste0("\nProcessing block ", b, "/", r_blocks$n,""), file = log_file, append = TRUE)
+    cat(paste0("\nProcessing block ", b, "/", r_blocks$n,""))
+    
     # --------------------------------------------------------------------------------------
     # files to write grid data chunks output 
     fname_grid_sf <- paste0(tile_dir, "/", stringr::str_pad(string = b, width = 4, pad = "0"), "_grid.geojson")
@@ -50,9 +53,6 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, grid_30sec, s
       return(TRUE)
     }
     
-    # cat(paste0("\nProcessing block ", b, "/", r_blocks$n,""), file = log_file, append = TRUE)
-    cat(paste0("\nProcessing block ", b, "/", r_blocks$n,""))
-    
     # --------------------------------------------------------------------------------------
     # Get sub tile extent 
     sub_tile_extent <- raster::extent(tile, r_blocks$row[b], r_blocks$row[b] + r_blocks$nrows[b] - 1, 1, ncol(tile)) 
@@ -61,6 +61,8 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, grid_30sec, s
     
     # --------------------------------------------------------------------------------------
     # project raster to equal-area 
+    row_start <- raster::rowFromCell(grid_30sec, raster::cellsFromExtent(grid_30sec, sub_tile_extent))[1]
+    
     sub_tile_grid <- raster::crop(grid_30sec, y = sub_tile_extent) 
     layer_names <- names(sub_tile_grid)
     
@@ -110,7 +112,7 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, grid_30sec, s
       dplyr::summarise(area_loss = sum(area, na.rm = TRUE)) %>% 
       dplyr::ungroup() %>% 
       dplyr::mutate(area_loss = ifelse(year == 0, 0, area_loss)) %>% 
-      tidyr::complete(year = full_seq(year, 1), nesting(id), fill = list(area_loss = 0)) %>% 
+      tidyr::complete(year = tidyr::full_seq(0:17, 1), nesting(id), fill = list(area_loss = 0)) %>% 
       dplyr::group_by(id) %>% 
       dplyr::arrange(year) %>% 
       dplyr::mutate(accumulated_loss = c(0, cumsum(area_loss[year != 0]))) %>% 
@@ -172,7 +174,7 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, grid_30sec, s
         dplyr::summarise(area_loss = sum(area, na.rm = TRUE)) %>% 
         dplyr::ungroup() %>% 
         dplyr::mutate(area_loss = ifelse(year == 0, 0, area_loss)) %>% 
-        tidyr::complete(year = full_seq(year, 1), nesting(id), fill = list(area_loss = 0)) %>% 
+        tidyr::complete(year = tidyr::full_seq(0:17, 1), nesting(id), fill = list(area_loss = 0)) %>% 
         dplyr::group_by(id) %>% 
         dplyr::arrange(year) %>% 
         dplyr::mutate(accumulated_loss = c(0, cumsum(area_loss[year != 0]))) %>% 
@@ -240,17 +242,21 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, grid_30sec, s
                        area_forest_2000_mine_lease = as.numeric(area_forest_2000_mine_lease), 
                        area_accumulated_loss_mine_lease = as.numeric(area_accumulated_loss_mine_lease), 
                        area_mine = as.numeric(area_mine)) %>% 
-      tidyr::complete(id = full_seq(id, 1), fill = list(area_forest_2000 = 0, 
-                                                        area_accumulated_forest_loss = 0, 
-                                                        area_forest_2000_mine_lease = 0, 
-                                                        area_accumulated_loss_mine_lease = 0, 
-                                                        area_mine = 0))
+      tibble::as_tibble() %>% 
+      dplyr::select(-geometry)
     
-    raster::writeValues(r_forest_area, r_out$area_forest_2000, start = r_blocks$row[b])
-    raster::writeValues(r_forest_area_loss, r_out$area_accumulated_forest_loss, start = r_blocks$row[b])
-    raster::writeValues(r_mine_lease_area, r_out$area_mine, start = r_blocks$row[b])
-    raster::writeValues(r_mine_lease_forest_2000, r_out$area_forest_2000_mine_lease, start = r_blocks$row[b])
-    raster::writeValues(r_mine_lease_forest_loss, r_out$area_accumulated_loss_mine_lease, start = r_blocks$row[b])
+    r_out <- r_out %>% 
+      tidyr::complete(id = tidyr::full_seq(1:ncell(sub_tile_grid), 1), fill = list(area_forest_2000 = 0, 
+                                                                                   area_accumulated_forest_loss = 0, 
+                                                                                   area_forest_2000_mine_lease = 0, 
+                                                                                   area_accumulated_loss_mine_lease = 0, 
+                                                                                   area_mine = 0))
+    
+    r_forest_area <- raster::writeValues(r_forest_area, r_out$area_forest_2000, start = row_start)
+    r_forest_area_loss <- raster::writeValues(r_forest_area_loss, r_out$area_accumulated_forest_loss, start = row_start)
+    r_mine_lease_area <- raster::writeValues(r_mine_lease_area, r_out$area_mine, start = row_start)
+    r_mine_lease_forest_2000 <- raster::writeValues(r_mine_lease_forest_2000, r_out$area_forest_2000_mine_lease, start = row_start)
+    r_mine_lease_forest_loss <- raster::writeValues(r_mine_lease_forest_loss, r_out$area_accumulated_loss_mine_lease, start = row_start)
     
     # cat(paste0("\nTile ", id_hansen, " done! ", capture.output(Sys.time() - start_time)), file = log_file, append = TRUE)
     cat(paste0("\nTile ", id_hansen, " subtile ", b, " done! ", capture.output(Sys.time() - start_time)))

@@ -6,7 +6,7 @@
 R-g --vanilla <<-EOF
 
   user_home <- "/gpfs/home/home/vmaus"
-  data_path <- "/gpfs/home/home/vmaus"
+  data_path <- "/gpfs/home/home/vmaus/data/geoserver"
 
   # Add user lib path
   user_lib_path <- "/gpfs/home/home/vmaus/R/x86_64-pc-linux-gnu-library/3.5.2"
@@ -16,8 +16,8 @@ R-g --vanilla <<-EOF
 
   # Get job id
   # Each job process one tile from hansen forest loss data set
-  job_id <- as.integer(Sys.getenv("SGE_TASK_ID"))
-  print(job_id)
+  cluster_job_id <- as.integer(Sys.getenv("SGE_TASK_ID"))
+  print(cluster_job_id)
 
   # Run job 
   source("./04_build_fineprint_30sec_grid.R")

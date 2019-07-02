@@ -7,6 +7,7 @@ library(sf)
 library(parallel)
 source("./R/build_forest_30sec_grid.R")
 raster::rasterOptions(tmpdir = "./raster_tmp/")
+raster::rasterOptions(format = "GTiff")
 
 # --------------------------------------------------------------------------------------
 # set path to data sets 
@@ -100,7 +101,7 @@ for(i in seq_along(processing_tiles$grid_30sec)){
 tiles_aggregated_forest_loss <- processing_tiles %>% 
   dplyr::mutate(out_file = purrr::pmap_chr(.l = list(job_id, id_hansen, area, year, 
                                                      treecover2000, grid_30sec), 
-                                           .f = build_30sec_grid, 
+                                           .f = build_forest_30sec_grid, 
                                            mine_polygons = sf::st_read(mine_polygons), 
                                            output_path = fineprint_grid_30sec_path, 
                                            ncores = 1))
