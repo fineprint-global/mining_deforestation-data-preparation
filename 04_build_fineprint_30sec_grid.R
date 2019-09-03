@@ -78,6 +78,7 @@ processing_tiles <- processing_tiles %>%
                                                   distance_highway_secondary = distance_highway_secondary,
                                                   distance_highway_trunk = distance_highway_trunk, 
                                                   distance_mine = distance_mine,
+                                                  distance_protected_area = distance_protected_area,
                                                   # distance_urban_2000 = distance_urban_2000,
                                                   # distance_mine_2000 = distance_mine_2000,
                                                   accessibility_cities_2015 = accessibility_cities_2015, 
