@@ -50,9 +50,9 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000
     fname_grid_sf <- paste0(tile_dir, "/", stringr::str_pad(string = b, width = 4, pad = "0"), "_grid.geojson")
     fname_forest_ts <- paste0(tile_dir, "/", stringr::str_pad(string = b, width = 4, pad = "0"), "_timeseries.csv")
     
-    if(file.exists(fname_grid_sf) && file.exists(fname_forest_ts)){
-      return(TRUE)
-    }
+    #if(file.exists(fname_grid_sf) && file.exists(fname_forest_ts)){
+    #  return(TRUE)
+    #}
     
     # --------------------------------------------------------------------------------------
     # Get sub tile extent 
