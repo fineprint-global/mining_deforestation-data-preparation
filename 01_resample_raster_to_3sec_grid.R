@@ -35,7 +35,7 @@ src_soilgrid <- paste0(data_path, "/rstudio/soilgrids-2019/soil_classification_2
 src_esa_cci_2000 <- paste0(data_path, "/rstudio/esa-cci/land-cover/2000/v2-0-7/esacci_lc_2000_v2-0-7.tif")
 src_elevation <- paste0(data_path, "/rstudio/amatulli-etal/topographic_variables/2018/dl_2019-07/elevation_1KMmn_GMTEDmn.tif")
 src_slope <- paste0(data_path, "/rstudio/amatulli-etal/topographic_variables/2018/dl_2019-07/slope_1KMmn_GMTEDmn.tif")
-src_mines <- paste0(data_path, "/mine_polygons/mine_polygons_v1r3.geojson")
+src_mines <- paste0(data_path, "/mine_polygons/mine_polygons_world_v1r3.geojson")
 src_accessibility_to_cities_2015 <- paste0(data_path, "/rstudio/weiss-etal/accessibility_to_cities/2015/v1-0/accessibility_to_cities_2015_v1-0.tif")
 src_countries <- path.expand(paste0(data_path, "/country_eurostat/2016/dl_2019_06_20/countries_polygon.geojson"))
 

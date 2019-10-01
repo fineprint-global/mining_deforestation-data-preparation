@@ -29,7 +29,7 @@ proxymity_gdal <- function(src_file, dst_file, land_mask, field = NULL, fun = "l
   f_tmp4 <- raster::rasterTmpFile()
   system.time(
     system(paste0("gdal_proximity.py ", f_tmp3," ", f_tmp4,
-                  " -values 1 -ot Float32 -co compress=LZW -co TILED=YES -distunits GEO -nodata NA -maxdist 1000000")))
+                  " -values 1 -ot Float32 -co compress=LZW -co TILED=YES -distunits GEO -nodata NA -maxdist 10000000")))
 
   # resample raster back to longlat 
   f_tmp5 <- raster::rasterTmpFile()

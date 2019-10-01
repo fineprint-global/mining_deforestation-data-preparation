@@ -20,25 +20,32 @@ fineprint_grid_30sec_path <- path.expand(paste0(data_path, "/fineprint_grid_30se
 dir.create(fineprint_grid_30sec_path, showWarnings = FALSE, recursive = TRUE)
 
 # --------------------------------------------------------------------------------------
+# path to mine polygons 
+mine_polygons <- path.expand(paste0(data_path, "/mine_polygons/mine_polygons_world_v1r3.geojson"))
+  
+
+# --------------------------------------------------------------------------------------
 # path to 30sec grid files 
-pop_2000 <- path.expand(paste0(fineprint_grid_30sec_path, "/population_density_2000.tif"))
-elevation <- path.expand(paste0(fineprint_grid_30sec_path, "/elevation.tif"))
-slope <- path.expand(paste0(fineprint_grid_30sec_path, "/slope.tif"))
-soilgrid <- path.expand(paste0(fineprint_grid_30sec_path, "/soilgrid.tif"))
-esa_cci_2000 <- path.expand(paste0(fineprint_grid_30sec_path, "/esa_cci_2000.tif"))
-distance_waterway_canal <- path.expand(paste0(fineprint_grid_30sec_path, "/distance_waterway_canal.tif"))
-distance_waterway_river <- path.expand(paste0(fineprint_grid_30sec_path, "/distance_waterway_river.tif"))
-distance_highway_primary <- path.expand(paste0(fineprint_grid_30sec_path, "/distance_highway_primary.tif"))
-distance_highway_motorway <- path.expand(paste0(fineprint_grid_30sec_path, "/distance_highway_motorway.tif"))
-distance_highway_secondary <- path.expand(paste0(fineprint_grid_30sec_path, "/distance_highway_secondary.tif"))
-distance_highway_trunk <- path.expand(paste0(fineprint_grid_30sec_path, "/distance_highway_trunk.tif"))
-distance_mine <- path.expand(paste0(fineprint_grid_30sec_path, "/distance_mine.tif"))
-distance_protected_area <- path.expand(paste0(fineprint_grid_30sec_path, "/distance_protected_areas.tif"))
-# distance_urban_2000 <- paste0(fineprint_grid_30sec_path, "/distance_urban_2000.tif")
-# distance_mine_2000 <- paste0(fineprint_grid_30sec_path, "/distance_mine_2000.tif")
-accessibility_cities_2015 <- paste0(fineprint_grid_30sec_path, "/accessibility_to_cities_2015.tif")
-countries <- paste0(fineprint_grid_30sec_path, "/countries.tif")
-mine_polygons <- paste0(data_path, "/mine_polygons/mine_polygons_v1r3.geojson")
+grid_file_paths <- 
+  c(elevation                  = path.expand(paste0(fineprint_grid_30sec_path, "/elevation.tif")),
+    slope                      = path.expand(paste0(fineprint_grid_30sec_path, "/slope.tif")),
+    soilgrid                   = path.expand(paste0(fineprint_grid_30sec_path, "/soilgrid.tif")),
+    esa_cci_2000               = path.expand(paste0(fineprint_grid_30sec_path, "/esa_cci_2000.tif")),
+    pop_2000                   = path.expand(paste0(fineprint_grid_30sec_path, "/population_density_2000.tif")),
+    distance_waterway_canal    = path.expand(paste0(fineprint_grid_30sec_path, "/distance_waterway_canal.tif")),
+    distance_waterway_river    = path.expand(paste0(fineprint_grid_30sec_path, "/distance_waterway_river.tif")),
+    distance_highway_primary   = path.expand(paste0(fineprint_grid_30sec_path, "/distance_highway_primary.tif")),
+    distance_highway_motorway  = path.expand(paste0(fineprint_grid_30sec_path, "/distance_highway_motorway.tif")),
+    distance_highway_secondary = path.expand(paste0(fineprint_grid_30sec_path, "/distance_highway_secondary.tif")),
+    distance_highway_trunk     = path.expand(paste0(fineprint_grid_30sec_path, "/distance_highway_trunk.tif")), 
+    distance_mine              = path.expand(paste0(fineprint_grid_30sec_path, "/distance_mine.tif")),
+    distance_protected_area    = path.expand(paste0(fineprint_grid_30sec_path, "/distance_protected_areas.tif")),
+    # distance_to_coastline      = paste0(fineprint_grid_30sec_path, "/distance_to_coastline.tif"),
+    # distance_urban_2000        = paste0(fineprint_grid_30sec_path, "/distance_urban_2000.tif"),
+    # distance_mine_2000         = paste0(fineprint_grid_30sec_path, "/distance_mine_2000.tif"),
+    accessibility_cities_2015 = paste0(fineprint_grid_30sec_path, "/accessibility_to_cities_2015.tif"), 
+    countries = paste0(fineprint_grid_30sec_path, "/countries.tif")
+  )
 
 # --------------------------------------------------------------------------------------
 # get path dir data sets 
@@ -66,23 +73,7 @@ processing_tiles <- dir(pixel_area_dir, pattern = ".tif$", full.name = TRUE) %>%
 # --------------------------------------------------------------------------------------
 # 4. Get data sets 
 processing_tiles <- processing_tiles %>% 
-  dplyr::mutate(grid_30sec = list(raster::stack(c(elevation = elevation,
-                                                  slope = slope,
-                                                  soilgrid = soilgrid,
-                                                  esa_cci_2000 = esa_cci_2000,
-                                                  pop_2000 = pop_2000,
-                                                  distance_waterway_canal = distance_waterway_canal,
-                                                  distance_waterway_river = distance_waterway_river,
-                                                  distance_highway_primary = distance_highway_primary,
-                                                  distance_highway_motorway = distance_highway_motorway,
-                                                  distance_highway_secondary = distance_highway_secondary,
-                                                  distance_highway_trunk = distance_highway_trunk, 
-                                                  distance_mine = distance_mine,
-                                                  distance_protected_area = distance_protected_area,
-                                                  # distance_urban_2000 = distance_urban_2000,
-                                                  # distance_mine_2000 = distance_mine_2000,
-                                                  accessibility_cities_2015 = accessibility_cities_2015, 
-                                                  countries = countries)))) 
+  dplyr::mutate(grid_30sec = list(raster::stack(grid_file_paths))) 
 
 # --------------------------------------------------------------------------------------
 # 4. Check tiles already processed 
