@@ -1,4 +1,4 @@
-build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000, grid_30sec, output_path, mine_polygons, log_file = NULL, ncores = 1){
+build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000, grid_30sec, output_path, mine_polygons, country_codes, log_file = NULL, ncores = 1){
 
   # job_id <- processing_tiles$job_id[[1]]
   # id_hansen <- processing_tiles$id_hansen[[1]]
@@ -8,6 +8,7 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000
   # grid_30sec <- processing_tiles$grid_30sec[[1]]
   # output_path <- paste0(fineprint_grid_30sec_path, "/test_processing")
   # mine_polygons <- sf::st_read(mine_polygons)
+  # country_codes <- readr::read_csv(country_codes)
   # ncores <- 1
   
   # --------------------------------------------------------------------------------------
@@ -33,10 +34,11 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000
   tile_dir <- paste0(output_path, "/", id_hansen)
   dir.create(tile_dir, showWarnings = FALSE, recursive = TRUE)
   r_forest_area <- raster::writeStart(raster::raster(tile_30sec), filename = paste0(tile_dir, "/forest_area_2000.tif"), overwrite = TRUE)
-  r_forest_area_loss <- raster::writeStart(raster::raster(tile_30sec), filename = paste0(tile_dir, "/forest_area_loss_2017.tif"), overwrite = TRUE)
+  r_forest_area_loss <- raster::writeStart(raster::raster(tile_30sec), filename = paste0(tile_dir, "/forest_area_loss_2019.tif"), overwrite = TRUE)
   r_mine_lease_area <- raster::writeStart(raster::raster(tile_30sec), filename = paste0(tile_dir, "/mine_lease_area.tif"), overwrite = TRUE)
   r_mine_lease_forest_2000 <- raster::writeStart(raster::raster(tile_30sec), filename = paste0(tile_dir, "/mine_lease_forest_2000.tif"), overwrite = TRUE)
   r_mine_lease_forest_loss <- raster::writeStart(raster::raster(tile_30sec), filename = paste0(tile_dir, "/mine_lease_forest_loss.tif"), overwrite = TRUE)
+  r_mine_lease_forest_loss_timeseries <- raster::writeStart(raster::brick(tile_30sec, values = FALSE, nl = 20), filename = paste0(tile_dir, "/mine_lease_forest_loss_timeseries.tif"), overwrite = TRUE)
   
   # --------------------------------------------------------------------------------------
   #  block_values <- parallel::mclapply(1:r_blocks$n, mc.cores = ncores, function(b){
@@ -70,7 +72,9 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000
     # get 30 sec grid for sub tile 
     sub_tile_tbl <- sub_tile_grid %>% 
       stars::st_as_stars() %>% 
-      sf::st_as_sf(x, merge = FALSE, as_points = FALSE)
+      sf::st_as_sf(x, merge = FALSE, as_points = FALSE) %>% 
+      tibble::as_tibble() %>% 
+      sf::st_as_sf()
     
     names(sub_tile_tbl) <- c(layer_names, "geometry")
     
@@ -106,9 +110,9 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000
           tibble::as_tibble() %>% 
           dplyr::rename_all(list(~make.names(c("id", "area", "treecover2000")))) %>% 
           dplyr::group_by(id) %>% 
-          dplyr::summarise(area_2000 = sum(as.numeric(area) * as.numeric(treecover2000) / 100, na.rm = TRUE)) %>% 
+          dplyr::summarise(area_2000 = sum(as.numeric(area) * as.numeric(treecover2000) / 100, na.rm = TRUE), .groups = 'drop') %>% 
           dplyr::mutate(area_2000 = units::set_units(area_2000, "km^2")) %>% 
-          dplyr::mutate(area_2000 = units::set_units(area_2000, "m^2"))
+          dplyr::mutate(area_2000 = units::set_units(area_2000, "m^2")) 
         
         # --------------------------------------------------------------------------------------
         # calculate forest loss area time series for 30sec grid 
@@ -117,7 +121,7 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000
           dplyr::rename_all(list(~make.names(c("id", names(tile))))) %>% 
           dplyr::mutate(area = as.numeric(area) * as.numeric(treecover2000) / 100) %>% 
           dplyr::group_by(id, year) %>% 
-          dplyr::summarise(area_loss = sum(area, na.rm = TRUE)) %>% 
+          dplyr::summarise(area_loss = sum(area, na.rm = TRUE), .groups = 'drop') %>% 
           dplyr::ungroup() %>% 
           dplyr::mutate(area_loss = ifelse(year == 0, 0, area_loss)) %>% 
           tidyr::complete(year = tidyr::full_seq(0:17, 1), nesting(id), fill = list(area_loss = 0)) %>% 
@@ -147,7 +151,9 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000
       tibble::tibble(id_grid = character(), year = double(), accumulated_loss_mine_lease = double(), area_forest_mine_lease = double()) 
     forest_mine <- 
       tibble::tibble(area_forest_2000_mine_lease = double(), area_accumulated_loss_mine_lease = double(), id_grid = character(), area_mine = double())
-    
+    out_forest_timeseries <- 
+      tibble::tibble(id_grid = character(), year = double(), area_forest_loss_mine_lease = double(), area_forest_mine_lease = double())
+
     if(nrow(mine_intersecting_grid) > 0){
       
       # get intersecting grid cells 
@@ -163,7 +169,7 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000
         dplyr::filter(lengths(sf::st_intersects(., mine_intersecting_grid, sparse = TRUE)) > 0) %>% 
         sf::st_intersection(sf::st_geometry(mine_intersecting_grid)) %>% 
         dplyr::group_by(id_grid) %>% 
-        dplyr::summarise() %>% 
+        dplyr::summarise(.groups = 'drop') %>% 
         dplyr::mutate(area_mine = sf::st_area(geometry), id = dplyr::row_number()) %>% 
         sf::st_cast("MULTIPOLYGON")
 
@@ -177,7 +183,7 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000
             tibble::as_tibble() %>% 
             dplyr::rename_all(list(~make.names(c("id", "area", "treecover2000")))) %>% 
             dplyr::group_by(id) %>% 
-            dplyr::summarise(area_2000 = sum(as.numeric(area) * as.numeric(treecover2000) / 100, na.rm = TRUE)) %>% 
+            dplyr::summarise(area_2000 = sum(as.numeric(area) * as.numeric(treecover2000) / 100, na.rm = TRUE), .groups = 'drop') %>% 
             dplyr::mutate(area_2000 = units::set_units(area_2000, "km^2")) %>% 
             dplyr::mutate(area_2000 = units::set_units(area_2000, "m^2"))
           
@@ -186,10 +192,10 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000
             dplyr::rename_all(list(~make.names(c("id", names(tile))))) %>% 
             dplyr::mutate(area = as.numeric(area) * as.numeric(treecover2000) / 100) %>% 
             dplyr::group_by(id, year) %>% 
-            dplyr::summarise(area_loss = sum(area, na.rm = TRUE)) %>% 
+            dplyr::summarise(area_loss = sum(area, na.rm = TRUE), .groups = 'drop') %>% 
             dplyr::ungroup() %>% 
             dplyr::mutate(area_loss = ifelse(year == 0, 0, area_loss)) %>% 
-            tidyr::complete(year = tidyr::full_seq(0:17, 1), nesting(id), fill = list(area_loss = 0)) %>% 
+            tidyr::complete(year = tidyr::full_seq(0:19, 1), nesting(id), fill = list(area_loss = 0)) %>% 
             dplyr::group_by(id) %>% 
             dplyr::arrange(year) %>% 
             dplyr::mutate(accumulated_loss = c(0, cumsum(area_loss[year != 0]))) %>% 
@@ -205,17 +211,24 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000
           # calculate total mine forest 
           forest_mine <- mine_forest_loss_time_series %>% 
             dplyr::select(-area_loss) %>% 
-            dplyr::filter(year %in% c(2000, 2017)) %>% 
+            dplyr::filter(year %in% c(2000, 2019)) %>% 
             dplyr::group_by(id) %>% 
             dplyr::summarise(area_forest_2000_mine_lease = area_forest[year == 2000], 
-                             area_accumulated_loss_mine_lease = accumulated_loss[year == 2017]) %>% 
+                             area_accumulated_loss_mine_lease = accumulated_loss[year == 2019], .groups = 'drop') %>% 
             dplyr::left_join(sf::st_drop_geometry(mine_grid_intersection), by = c("id" = "id")) %>% 
             dplyr::select(-id)
           
-          mine_forest_loss_time_series <- mine_forest_loss_time_series %>% 
+          out_forest_timeseries <- mine_forest_loss_time_series %>% 
             dplyr::left_join(sf::st_drop_geometry(mine_grid_intersection), by = c("id" = "id")) %>% 
-            dplyr::select(id_grid, year, accumulated_loss_mine_lease = area_loss, 
-                          area_forest_mine_lease = accumulated_loss)
+            dplyr::select(id_grid, year, area_forest_loss_mine_lease = area_loss, area_forest_mine_lease = area_forest)
+	  
+	  out_forest_timeseries %>%
+            dplyr::left_join(tibble::as_tibble(sub_tile_tbl) %>% dplyr::select(id_grid, RASTER_VALUE = countries), by = c("id_grid" = "id_grid")) %>% 
+            dplyr::left_join(country_codes, by = c("RASTER_VALUE" = "RASTER_VALUE")) %>%
+	    readr::write_csv(path = fname_forest_ts)
+          #  dplyr::left_join(tibble::as_tibble(sub_tile_tbl) %>% dplyr::select(id, countries), by = c("id" = "id")) %>% 
+          #  readr::write_csv(path = fname_forest_ts)
+
         } 
       }
       
@@ -224,29 +237,37 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000
     # --------------------------------------------------------------------------------------
     # calculate total forest area 
     forest <- forest_timeseries %>% 
-      dplyr::filter(year %in% c(2000, 2017)) %>% 
+      dplyr::filter(year %in% c(2000, 2019)) %>% 
       dplyr::group_by(id) %>% 
       dplyr::summarise(area_forest_2000 = area_forest[year == 2000], 
-                       area_accumulated_forest_loss = accumulated_loss[year == 2017])
+                       area_accumulated_forest_loss = accumulated_loss[year == 2019], .groups = 'drop')
     
-    # --------------------------------------------------------------------------------------
-    # replace local id with global id_grid
-    out_forest_timeseries <- sub_tile_tbl %>% 
-      tibble::as_tibble() %>% 
-      dplyr::select(id, id_grid) %>% 
-      dplyr::right_join(forest_timeseries, by = c("id" = "id")) %>% 
-      dplyr::select(-id, area_loss) %>% 
-      dplyr::left_join(mine_forest_loss_time_series, by = c("id_grid" = "id_grid", "year" = "year")) %>% 
-      tidyr::replace_na(list(area_forest_mine_lease = 0, accumulated_loss_mine_lease = 0)) 
-      
+
     out_sub_tile_tbl <- sub_tile_tbl %>% 
-      dplyr::left_join(forest, by = c("id", "id")) %>% 
-      dplyr::left_join(forest_mine, by = c("id_grid", "id_grid")) %>% 
+      dplyr::left_join(forest, by = c("id" = "id")) %>% 
+      dplyr::left_join(forest_mine, by = c("id_grid" = "id_grid")) %>% 
       tidyr::replace_na(list(area_forest_2000_mine_lease = 0, area_accumulated_loss_mine_lease = 0, area_mine = 0)) 
     
     # --------------------------------------------------------------------------------------
+    # replace local id with global id_grid build raster output 
+    out_forest_timeseries <- sub_tile_tbl %>% 
+      tibble::as_tibble() %>% 
+      dplyr::select(id_grid) %>% 
+      dplyr::left_join(out_forest_timeseries, by = c("id_grid" = "id_grid")) %>%
+      tidyr::complete(year = tidyr::full_seq(2000:2019, 1), nesting(id_grid), fill = list(area_forest_loss_mine_lease = 0, area_forest_mine_lease = 0)) %>%
+      dplyr::select(-area_forest_mine_lease) %>%
+      tidyr::spread(year, area_forest_loss_mine_lease) %>% 
+      dplyr::select(-id_grid) %>% 
+      as.matrix()
+      #  dplyr::select(-id, id_grid, area_loss, countries) %>% 
+      #  dplyr::left_join(mine_forest_loss_time_series, by = c("id_grid" = "id_grid", "year" = "year")) %>% 
+      #  tidyr::replace_na(list(area_forest_mine_lease = 0, accumulated_loss_mine_lease = 0)) %>%
+      #  dplyr::group_by(countries, year) %>%
+      #  dplyr::summarise(area_forest_mine_lease = sum(area_forest_mine_lease, na.rm = TRUE), accumulated_loss_mine_lease = sum(accumulated_loss_mine_leas, na.rm = TRUE), .groups = 'drop')
+
+    # --------------------------------------------------------------------------------------
     # write results to file 
-    # readr::write_csv(out_forest_timeseries, path = fname_forest_ts)
+    #readr::write_csv(out_forest_timeseries, path = fname_forest_ts)
     out_sub_tile_tbl %>% 
       dplyr::select(-id) %>% 
       sf::st_write(dsn = fname_grid_sf, factorsAsCharacter = TRUE, delete_dsn = TRUE)
@@ -268,13 +289,17 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000
                                                                                    area_forest_2000_mine_lease = 0, 
                                                                                    area_accumulated_loss_mine_lease = 0, 
                                                                                    area_mine = 0))
-    
+
+ 
     r_forest_area <- raster::writeValues(r_forest_area, r_out$area_forest_2000, start = row_start)
     r_forest_area_loss <- raster::writeValues(r_forest_area_loss, r_out$area_accumulated_forest_loss, start = row_start)
     r_mine_lease_area <- raster::writeValues(r_mine_lease_area, r_out$area_mine, start = row_start)
     r_mine_lease_forest_2000 <- raster::writeValues(r_mine_lease_forest_2000, r_out$area_forest_2000_mine_lease, start = row_start)
     r_mine_lease_forest_loss <- raster::writeValues(r_mine_lease_forest_loss, r_out$area_accumulated_loss_mine_lease, start = row_start)
-    
+    #mine_forest_loss_time_series_mat <- mine_forest_loss_time_series
+    #dplyr::select(df, -forest) %>% tidyr::spread(year, loss) %>% dplyr::select(-id) %>% as.atrix()
+    r_mine_lease_forest_loss_timeseries <- raster::writeValues(r_mine_lease_forest_loss_timeseries, out_forest_timeseries, start = row_start)
+
     # cat(paste0("\nTile ", id_hansen, " done! ", capture.output(Sys.time() - start_time)), file = log_file, append = TRUE)
     cat(paste0("\nTile ", id_hansen, " subtile ", b, " done! ", capture.output(Sys.time() - start_time)))
     
@@ -287,6 +312,7 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000
   r_mine_lease_area <- raster::writeStop(r_mine_lease_area)
   r_mine_lease_forest_2000 <- raster::writeStop(r_mine_lease_forest_2000)
   r_mine_lease_forest_loss <- raster::writeStop(r_mine_lease_forest_loss)
+  r_mine_lease_forest_loss_timeseries <- raster::writeStop(r_mine_lease_forest_loss_timeseries)
   
   cat(paste0("\nTile ", id_hansen, " done! ", capture.output(Sys.time() - start_time)))
   return(TRUE)

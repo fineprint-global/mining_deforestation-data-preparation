@@ -2,17 +2,18 @@
 #$ -M victor.maus@wu.ac.at
 #$ -m e
 #$ -q node.q
+#$ -wd /gpfs/home/home/vmaus/workspace/mining_deforestation
 
-R-g --vanilla <<-EOF
+# set conda geo R env
+conda activate geor
 
-  user_home <- "/gpfs/home/home/vmaus"
+# call R
+# n jobs 1:327
+R --vanilla <<-EOF
+
+  project_path <- Sys.getenv("SGE_O_WORKDIR")
   data_path <- "/gpfs/home/home/vmaus/data/geoserver"
-
-  # Add user lib path
-  user_lib_path <- "/gpfs/home/home/vmaus/R/x86_64-pc-linux-gnu-library/3.5.2"
-  Sys.setenv(R_LIBS_USER = user_lib_path)
-  .libPaths(c(Sys.getenv("R_LIBS_USER"), .libPaths()))
-  print(.libPaths())
+  setwd(project_path)
 
   # Get job id
   # Each job process one tile from hansen forest loss data set
