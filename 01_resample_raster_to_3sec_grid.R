@@ -52,6 +52,7 @@ dst_slope <- paste0(fineprint_grid_30sec_path, "/slope.tif")
 dst_mines <- paste0(fineprint_grid_30sec_path, "/distance_mine.tif")
 dst_accessibility_to_cities_2015 <- paste0(fineprint_grid_30sec_path, "/accessibility_to_cities_2015.tif")
 dst_countries <- paste0(fineprint_grid_30sec_path, "/countries.tif")
+dst_contiguous_land <- paste0(fineprint_grid_30sec_path, "/contiguous_land.tif")
 dst_countries_concordance <- paste0(fineprint_grid_30sec_path, "/countries_concordance.csv")
 
 # --------------------------------------------------------------------------------------
@@ -89,11 +90,11 @@ if(!file.exists(dst_ecoregions)){
 
 
 # --------------------------------------------------------------------------------------
-# build 30sec grid for ecoregions 
+# build 30sec grid for countries 
 if(!file.exists(dst_countries)){
   
   # read country shape 
-  countries <- sf::st_read(dsn = src_countries, query = "SELECT ISO3_CODE, COUNTRY_NAME_EN FROM OGRGeoJSON")
+  countries <- sf::st_read(dsn = src_countries, query = "SELECT ISO3_CODE, COUNTRY_NAME_EN FROM countries_polygon")
   
   # create concordance table 
   countries_concordance <- countries %>% 
@@ -116,6 +117,25 @@ if(!file.exists(dst_countries)){
   
 }
 # raster::raster(dst_countries) %>% plot()
+
+# --------------------------------------------------------------------------------------
+# build 30sec grid for contiguous land 
+if(!file.exists(dst_contiguous_land)){
+  
+  # read country shape 
+  contiguous_land <- sf::st_read(dsn = src_countries, query = "SELECT ISO3_CODE FROM countries_polygon") %>% 
+    sf::st_union() %>% 
+    sf::st_cast("POLYGON")  %>% 
+    sf::st_as_sf() %>% 
+    dplyr::mutate(RASTER_VALUE = dplyr::row_number())
+  
+  # rasterize countries 
+  system.time(write_fasterize(sf = countries, raster = grid_30sec, filename = dst_contiguous_land, 
+                              field = "RASTER_VALUE", fun = "last", background = NA, overwrite = TRUE))
+  
+}
+# raster::raster(dst_countries) %>% plot()
+
 
 # --------------------------------------------------------------------------------------
 # population density 

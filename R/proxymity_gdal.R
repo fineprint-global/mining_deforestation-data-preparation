@@ -29,7 +29,7 @@ proxymity_gdal <- function(src_file, dst_file, land_mask, field = NULL, fun = "l
   f_tmp4 <- raster::rasterTmpFile()
   system.time(
     system(paste0("gdal_proximity.py ", f_tmp3," ", f_tmp4,
-                  " -values 1 -ot Float32 -co compress=LZW -co TILED=YES -distunits GEO -nodata NA -maxdist 10000000")))
+                  " -values 1 -ot Float32 -co compress=LZW -co TILED=YES -distunits GEO -nodata NA -maxdist 15000000")))
 
   # resample raster back to longlat 
   f_tmp5 <- raster::rasterTmpFile()
@@ -57,9 +57,14 @@ write_fasterize <- function(sf, raster, filename = NULL, field = NULL, fun = "la
     filename <- raster::rasterTmpFile()
   }
   
-  sf::st_read(sf) %>% 
-    fasterize::fasterize(raster = raster, field = field, fun = fun, background = background, by = by) %>% 
-    raster::writeRaster(filename = filename, overwrite = overwrite, ...)
+  if(is(sf, "sf")){
+    fasterize::fasterize(sf = sf, raster = raster, field = field, fun = fun, background = background, by = by) %>% 
+      raster::writeRaster(filename = filename, overwrite = overwrite, ...)    
+  } else {
+    sf::st_read(sf) %>% 
+      fasterize::fasterize(raster = raster, field = field, fun = fun, background = background, by = by) %>% 
+      raster::writeRaster(filename = filename, overwrite = overwrite, ...)
+  }
   
   return(filename)
   
