@@ -19,6 +19,7 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000
   
   # --------------------------------------------------------------------------------------
   # Split processing blocks
+  # r_blocks <- raster::blockSize(tile, minblocks = 800)
   r_blocks <- raster::blockSize(tile, minrows = 160)
   output_path <- paste0(output_path, "/timeseries", format(Sys.time(), "_%Y%m%d"))
   dir.create(output_path, showWarnings = FALSE, recursive = TRUE)
@@ -90,38 +91,81 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000
     }
     
     # --------------------------------------------------------------------------------------
-    # build velox object 
-    forest_2000_velox <- raster::subset(tile, c("area", "treecover2000")) %>% 
-      raster::crop(sub_tile_extent) %>% 
-      velox::velox()
+    # redimention stack: year attr to dim 
+    # forest_2000_velox <- raster::subset(tile, c("area", "treecover2000")) %>% 
+    #   raster::crop(sub_tile_extent) %>% 
+    #   stars::st_as_stars()
+      # velox::velox()
+
+    fun_forest_area <- function(x){
+      # 10% forest cover 2000 threshold - https://developers.google.com/earth-engine/tutorials/community/forest-cover-loss-estimation
+      res <- c(ifelse(x[3] >= 10, x[2], 0), rep(NA, 19))
+      if( x[1] == 0 ) return(res)
+      # get forest loss area
+      res[x[1] + 1] <- x[2]
+      return(res)
+    }
     
-    velox_tile <- raster::crop(tile, sub_tile_extent) %>% 
-      velox::velox()
+    forest_stars <- raster::subset(tile, c("year", "area", "treecover2000")) %>% 
+      raster::crop(sub_tile_extent) %>% 
+      stars::st_as_stars() %>% 
+      stars::st_apply(MARGIN = 1:2, FUN = fun_forest_area)
+    
+    # sub_tile_tbl %>% 
+    #   sf::st_drop_geometry() %>% 
+    #   tibble::as_tibble() %>% 
+    #   dplyr::select(id) %>% 
+    #   dplyr::bind_cols(loss_tbl) %>% 
+    #   tidyr::pivot_longer(cols = num_range(prefix = "Y", range = 2001:2019), names_to = "year", values_to = "area") %>% 
+    #   dplyr::mutate(year = as.numeric(stringr::str_remove(year, "Y")))
+    
+    # velox_tile <- raster::crop(tile, sub_tile_extent) %>% 
+    #   velox::velox()
     
     # --------------------------------------------------------------------------------------
     # aggregate forest area in 2000 to 30sec grid 
-    forest_2000_df <- forest_2000_velox$extract(sp = sub_tile_tbl, df = TRUE)
+    # forest_2000_df <- forest_2000_velox$extract(sp = sub_tile_tbl, df = TRUE)
+    
+    # calculate exact area 
+    loss_tbl <- lapply(1:20, function(y){
+      forest_stars %>% 
+        dplyr::slice("fun_forest_area", y) %>% 
+        as("Raster") %>% 
+        exactextractr::exact_extract(y = sub_tile_tbl, fun = 'sum', progress = FALSE)
+    })
+    names(loss_tbl) <- c("treecover2000", stringr::str_glue("Y{1:19}"))
+    
+    forest_2000_df <- sub_tile_tbl %>% 
+      sf::st_drop_geometry() %>% 
+      tibble::as_tibble() %>% 
+      dplyr::select(id) %>% 
+      dplyr::bind_cols(loss_tbl) 
+    
+    # sub_tile_tbl %>% 
+    #   sf::st_drop_geometry() %>% 
+    #   tibble::as_tibble() %>% 
+    #   dplyr::select(id) %>% 
+    #   dplyr::bind_cols(loss_tbl) %>% 
+    #   tidyr::pivot_longer(cols = num_range(prefix = "Y", range = 2001:2019), names_to = "year", values_to = "area") %>% 
+    #   dplyr::mutate(year = as.numeric(stringr::str_remove(year, "Y")))
+    
     forest_2000 <- 
       tibble::tibble(id = integer(), area_2000 = double()) 
     forest_timeseries <- 
       tibble::tibble(year = integer(), id = integer(), area_loss = double(), accumulated_loss = double(), area_forest = double())
     
-    if(class(forest_2000_df) == "data.frame"){
+    if(tibble::is_tibble(forest_2000_df)){
       if(nrow(forest_2000_df) > 0){
         forest_2000 <- forest_2000_df %>% 
-          tibble::as_tibble() %>% 
-          dplyr::rename_all(list(~make.names(c("id", "area", "treecover2000")))) %>% 
-          dplyr::group_by(id) %>% 
-          dplyr::summarise(area_2000 = sum(as.numeric(area) * as.numeric(treecover2000) / 100, na.rm = TRUE), .groups = 'drop') %>% 
+          dplyr::select(id, area_2000 = treecover2000) %>% 
           dplyr::mutate(area_2000 = units::set_units(area_2000, "km^2")) %>% 
           dplyr::mutate(area_2000 = units::set_units(area_2000, "m^2")) 
         
         # --------------------------------------------------------------------------------------
         # calculate forest loss area time series for 30sec grid 
-        forest_timeseries <- velox_tile$extract(sp = sub_tile_tbl, df = TRUE) %>% 
-          tibble::as_tibble() %>% 
-          dplyr::rename_all(list(~make.names(c("id", names(tile))))) %>% 
-          dplyr::mutate(area = as.numeric(area) * as.numeric(treecover2000) / 100) %>% 
+        forest_timeseries <- forest_2000_df %>% 
+          tidyr::pivot_longer(cols = num_range(prefix = "Y", range = 1:19), names_to = "year", values_to = "area") %>%
+          dplyr::mutate(year = as.numeric(stringr::str_remove(year, "Y"))) %>% 
           dplyr::group_by(id, year) %>% 
           dplyr::summarise(area_loss = sum(area, na.rm = TRUE), .groups = 'drop') %>% 
           dplyr::ungroup() %>% 
@@ -173,26 +217,38 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000
         dplyr::group_by(id_grid) %>% 
         dplyr::summarise(.groups = 'drop') %>% 
         dplyr::mutate(area_mine = sf::st_area(geometry), id = dplyr::row_number()) %>% 
-        sf::st_cast("MULTIPOLYGON")
+        sf::st_cast("MULTIPOLYGON") %>% 
+        sf::st_transform(crs = "+proj=longlat")
 
       # calculate forest loss time series from direct mining within grid cells 
-      mine_forest_2000 <- forest_2000_velox$extract(sp = sf::st_transform(mine_grid_intersection, crs = "+proj=longlat"), df = TRUE) 
+      # mine_forest_2000 <- forest_2000_velox$extract(sp = sf::st_transform(mine_grid_intersection, crs = "+proj=longlat"), df = TRUE) 
       
-      if(class(mine_forest_2000) == "data.frame"){
-        if(nrow(mine_forest_2000) > 0){
+      loss_tbl <- lapply(1:20, function(y){
+        forest_stars %>% 
+          dplyr::slice("fun_forest_area", y) %>% 
+          as("Raster") %>% 
+          exactextractr::exact_extract(y = mine_grid_intersection, fun = 'sum', progress = FALSE)
+      })
+      names(loss_tbl) <- c("treecover2000", stringr::str_glue("Y{1:19}"))
+      
+      mine_forest_df <- mine_grid_intersection %>% 
+        sf::st_drop_geometry() %>% 
+        tibble::as_tibble() %>% 
+        dplyr::select(id) %>% 
+        dplyr::bind_cols(loss_tbl) 
+      
+      
+      if(tibble::is_tibble(mine_forest_df)){
+        if(nrow(mine_forest_df) > 0){
           
-          mine_forest_2000 <- mine_forest_2000 %>% 
-            tibble::as_tibble() %>% 
-            dplyr::rename_all(list(~make.names(c("id", "area", "treecover2000")))) %>% 
-            dplyr::group_by(id) %>% 
-            dplyr::summarise(area_2000 = sum(as.numeric(area) * as.numeric(treecover2000) / 100, na.rm = TRUE), .groups = 'drop') %>% 
+          mine_forest_2000 <- mine_forest_df %>% 
+            dplyr::select(id, area_2000 = treecover2000) %>% 
             dplyr::mutate(area_2000 = units::set_units(area_2000, "km^2")) %>% 
-            dplyr::mutate(area_2000 = units::set_units(area_2000, "m^2"))
+            dplyr::mutate(area_2000 = units::set_units(area_2000, "m^2")) 
           
-          mine_forest_loss_time_series <- velox_tile$extract(sp = sf::st_transform(mine_grid_intersection, crs = "+proj=longlat"), df = TRUE) %>%
-            tibble::as_tibble() %>% 
-            dplyr::rename_all(list(~make.names(c("id", names(tile))))) %>% 
-            dplyr::mutate(area = as.numeric(area) * as.numeric(treecover2000) / 100) %>% 
+          mine_forest_loss_time_series <- mine_forest_df %>% 
+            tidyr::pivot_longer(cols = num_range(prefix = "Y", range = 1:19), names_to = "year", values_to = "area") %>%
+            dplyr::mutate(year = as.numeric(stringr::str_remove(year, "Y"))) %>% 
             dplyr::group_by(id, year) %>% 
             dplyr::summarise(area_loss = sum(area, na.rm = TRUE), .groups = 'drop') %>% 
             dplyr::ungroup() %>% 
@@ -208,7 +264,7 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000
             dplyr::mutate(accumulated_loss = units::set_units(accumulated_loss, "m^2")) %>% 
             dplyr::left_join(mine_forest_2000, by = c("id" = "id")) %>% 
             dplyr::mutate(area_forest = ifelse(year == 0, area_2000, area_2000 - accumulated_loss), year = year + 2000) %>% 
-            dplyr::select(-area_2000) 
+            dplyr::select(-area_2000)  
           
           # calculate total mine forest 
           forest_mine <- mine_forest_loss_time_series %>% 
@@ -229,7 +285,7 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000
 	  out_forest_timeseries %>%
             dplyr::left_join(tibble::as_tibble(sub_tile_tbl) %>% dplyr::select(id_grid, RASTER_VALUE = countries), by = c("id_grid" = "id_grid")) %>% 
             dplyr::left_join(country_codes, by = c("RASTER_VALUE" = "RASTER_VALUE")) %>%
-	    readr::write_csv(path = fname_forest_ts)
+	    readr::write_csv(file = fname_forest_ts)
           #  dplyr::left_join(tibble::as_tibble(sub_tile_tbl) %>% dplyr::select(id, countries), by = c("id" = "id")) %>% 
           #  readr::write_csv(path = fname_forest_ts)
 

@@ -4,6 +4,8 @@ library(raster)
 library(velox)
 library(fasterize)
 library(sf)
+library(stars)
+library(exactextractr)
 library(parallel)
 source("./R/build_forest_30sec_grid.R")
 raster::rasterOptions(tmpdir = "./raster_tmp/")
@@ -74,8 +76,7 @@ processing_tiles <- dir(pixel_area_dir, pattern = ".tif$", full.name = TRUE) %>%
   dplyr::mutate(year = stringr::str_replace(year, "v1.5", "v1.7")) %>%
   dplyr::mutate(treecover2000 = paste0(treecover2000_dir, "/", stringr::str_replace(string = basename(year), pattern = "lossyear", replacement = "treecover2000"))) %>%
   dplyr::rowwise() %>% 
-  dplyr::mutate(area = list(raster::stack(c(area = area))),
-		year = list(raster::stack(c(year = year))),
+  dplyr::mutate(area = list(raster::stack(c(area = area))), year = list(raster::stack(c(year = year))),
 		treecover2000 = list(raster::stack(c(treecover2000 = treecover2000)))) %>%
   dplyr::mutate(geometry = sf::st_as_sfc(sf::st_bbox(area), sf::st_crs(area))) %>%
   sf::st_as_sf() %>%
