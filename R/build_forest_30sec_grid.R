@@ -1,4 +1,4 @@
-build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000, grid_30sec, output_path, mine_polygons, country_codes, log_file = NULL, ncores = 1){
+build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000, grid_30sec, mine_polygons, country_codes, log_file = NULL, grid_path, output_path, ncores = 1){
 
   # job_id <- processing_tiles$job_id[[1]]
   # id_hansen <- processing_tiles$id_hansen[[1]]
@@ -11,6 +11,8 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000
   # country_codes <- readr::read_csv(country_codes)
   # ncores <- 1
   
+  tile_start_time <- Sys.time()
+
   # --------------------------------------------------------------------------------------
   # stack raster files 
   tile <- raster::stack(c(area = area, year = year, treecover2000 = treecover2000))
@@ -21,12 +23,11 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000
   # Split processing blocks
   # r_blocks <- raster::blockSize(tile, minblocks = 800)
   r_blocks <- raster::blockSize(tile, minrows = 160)
-  output_path <- paste0(output_path, "/timeseries", format(Sys.time(), "_%Y%m%d%H%M%S"))
-  dir.create(output_path, showWarnings = FALSE, recursive = TRUE)
+  #output_path <- paste0(output_path, "/timeseries", format(Sys.time(), "_%Y%m%d%H%M%S"))
+  #dir.create(output_path, showWarnings = FALSE, recursive = TRUE)
   
   # --------------------------------------------------------------------------------------
   # Parallel processing 
-  start_time <- Sys.time()
   # cat(paste0("\nProcessing forest loss tile ", id_hansen, " using ", ncores," cores"), file = log_file, append = TRUE)
   cat(paste0("\nProcessing forest loss tile ", id_hansen, " using ", ncores," cores"))
   
@@ -47,8 +48,10 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000
   #  block_values <- parallel::mclapply(1:r_blocks$n, mc.cores = ncores, function(b){
   block_values <- lapply(1:r_blocks$n, function(b){
     
+    start_time <- Sys.time()
+
     # cat(paste0("\nProcessing block ", b, "/", r_blocks$n,""), file = log_file, append = TRUE)
-    cat(paste0("\nProcessing block ", b, "/", r_blocks$n,""))
+    cat(paste0("\n\nProcessing block ", b, "/", r_blocks$n,""))
     
     # --------------------------------------------------------------------------------------
     # files to write grid data chunks output 
@@ -285,7 +288,7 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000
 	  out_forest_timeseries %>%
             dplyr::left_join(tibble::as_tibble(sub_tile_tbl) %>% dplyr::select(id_grid, RASTER_VALUE = countries), by = c("id_grid" = "id_grid")) %>% 
             dplyr::left_join(country_codes, by = c("RASTER_VALUE" = "RASTER_VALUE")) %>%
-	    readr::write_csv(file = fname_forest_ts)
+	    readr::write_csv(fname_forest_ts)
           #  dplyr::left_join(tibble::as_tibble(sub_tile_tbl) %>% dplyr::select(id, countries), by = c("id" = "id")) %>% 
           #  readr::write_csv(path = fname_forest_ts)
 
@@ -334,7 +337,7 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000
     #readr::write_csv(out_forest_timeseries, path = fname_forest_ts)
     out_sub_tile_tbl %>% 
       dplyr::select(-id) %>% 
-      sf::st_write(dsn = fname_grid_sf, factorsAsCharacter = TRUE, delete_dsn = TRUE)
+      sf::st_write(dsn = fname_grid_sf, factorsAsCharacter = TRUE, delete_dsn = TRUE, quiet = TRUE)
     
     r_out <- out_sub_tile_tbl %>% 
       dplyr::transmute(id = id,
@@ -385,7 +388,7 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000
   r_mine_lease_forest_loss_2019 <- raster::writeStop(r_mine_lease_forest_loss_2019)
   r_mine_lease_forest_loss_timeseries <- raster::writeStop(r_mine_lease_forest_loss_timeseries)
   
-  cat(paste0("\nTile ", id_hansen, " done! ", capture.output(Sys.time() - start_time)))
+  cat(paste0("\nTile ", id_hansen, " done! ", capture.output(Sys.time() - tile_start_time)))
   return(TRUE)
   
 }

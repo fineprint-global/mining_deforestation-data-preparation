@@ -22,6 +22,8 @@ if(!exists("data_path"))
 # set output file 
 fineprint_grid_30sec_path <- path.expand(paste0(data_path, "/fineprint_grid_30sec"))
 dir.create(fineprint_grid_30sec_path, showWarnings = FALSE, recursive = TRUE)
+output_path <- paste0(fineprint_grid_30sec_path, "/timeseries", format(Sys.time(), "_%Y%m%d%H%M%S"))
+dir.create(output_path, showWarnings = FALSE, recursive = TRUE)
 
 # --------------------------------------------------------------------------------------
 # path to mine polygons 
@@ -85,9 +87,10 @@ processing_tiles <- dir(pixel_area_dir, pattern = ".tif$", full.name = TRUE) %>%
   dplyr::mutate(out_file = purrr::pmap_chr(.l = list(job_id, id_hansen, area, year, 
                                                      treecover2000, grid_30sec), 
                                            .f = build_forest_30sec_grid, 
-                                           mine_polygons = sf::st_read(mine_polygons), 
+                                           mine_polygons = sf::st_read(mine_polygons, quiet = TRUE), 
                                            country_codes = readr::read_csv(country_codes),
-					   output_path = fineprint_grid_30sec_path, 
+					   grid_path = fineprint_grid_30sec_path, 
+					   output_path = output_path, 
                                            ncores = 1)) 
 
 
