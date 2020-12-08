@@ -21,7 +21,7 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000
   # Split processing blocks
   # r_blocks <- raster::blockSize(tile, minblocks = 800)
   r_blocks <- raster::blockSize(tile, minrows = 160)
-  output_path <- paste0(output_path, "/timeseries", format(Sys.time(), "_%Y%m%d"))
+  output_path <- paste0(output_path, "/timeseries", format(Sys.time(), "_%Y%m%d%H%M%S"))
   dir.create(output_path, showWarnings = FALSE, recursive = TRUE)
   
   # --------------------------------------------------------------------------------------
