@@ -22,7 +22,8 @@ if(!exists("data_path"))
 # set output file 
 fineprint_grid_30sec_path <- path.expand(paste0(data_path, "/fineprint_grid_30sec"))
 dir.create(fineprint_grid_30sec_path, showWarnings = FALSE, recursive = TRUE)
-output_path <- paste0(fineprint_grid_30sec_path, "/timeseries", format(Sys.time(), "_%Y%m%d%H%M%S"))
+#output_path <- paste0(fineprint_grid_30sec_path, "/timeseries", format(Sys.time(), "_%Y%m%d%H%M%S"))
+output_path <- paste0(fineprint_grid_30sec_path, "/grid_", "_20201209_1")
 dir.create(output_path, showWarnings = FALSE, recursive = TRUE)
 
 # --------------------------------------------------------------------------------------
