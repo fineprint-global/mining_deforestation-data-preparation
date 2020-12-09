@@ -75,7 +75,7 @@ treecover2000_vrt <- path.expand(paste0(data_path, "/hansen/v1.7/treecover2000/t
 
 # --------------------------------------------------------------------------------------
 # 2. Get processing tiles 
-processing_tiles <- dir(pixel_area_dir, pattern = ".tif$", full.name = TRUE) %>% 
+processing_tiles <- dir(dirname(pixel_area_vrt), pattern = ".tif$", full.name = TRUE) %>% 
   tibble::tibble(tile = .) %>% 
   dplyr::transmute(job_id = dplyr::row_number(), id_hansen = stringr::str_match(tile, "/Hansen_GFC-2017-v1.5_lossyear_(.*?).tif")[,2], tile = tile) %>% 
   dplyr::mutate(id_hansen = stringr::str_remove_all(id_hansen, "_")) %>%
