@@ -69,30 +69,22 @@ grid_file_paths <-
 
 # --------------------------------------------------------------------------------------
 # get path dir data sets 
-pixel_area_dir <- path.expand(paste0(data_path, "/hansen/pixel_area"))
-forest_loss_dir <- path.expand(paste0(data_path, "/hansen/v1.7/lossyear"))
-treecover2000_dir <- path.expand(paste0(data_path, "/hansen/v1.7/treecover2000"))
+pixel_area_vrt <- path.expand(paste0(data_path, "/hansen/pixel_area/area.vrt"))
+forest_loss_vrt <- path.expand(paste0(data_path, "/hansen/v1.7/lossyear/lossyear.vrt"))
+treecover2000_vrt <- path.expand(paste0(data_path, "/hansen/v1.7/treecover2000/treecover2000.vrt"))
 
 # --------------------------------------------------------------------------------------
 # 2. Get processing tiles 
 processing_tiles <- dir(pixel_area_dir, pattern = ".tif$", full.name = TRUE) %>% 
-  tibble::tibble(area = .) %>% 
-  dplyr::transmute(job_id = dplyr::row_number(), id_hansen = stringr::str_match(area, "/Hansen_GFC-2017-v1.5_lossyear_(.*?).tif")[,2], area = area) %>% 
+  tibble::tibble(tile = .) %>% 
+  dplyr::transmute(job_id = dplyr::row_number(), id_hansen = stringr::str_match(tile, "/Hansen_GFC-2017-v1.5_lossyear_(.*?).tif")[,2], tile = tile) %>% 
   dplyr::mutate(id_hansen = stringr::str_remove_all(id_hansen, "_")) %>%
   dplyr::filter(job_id %in% unlist(ifelse(exists("cluster_job_id"), cluster_job_id, list(job_id)))) %>%
-  dplyr::mutate(year = paste0(forest_loss_dir, "/", basename(area))) %>%
-  dplyr::mutate(year = stringr::str_replace(year, "GFC-2017", "GFC-2019")) %>%
-  dplyr::mutate(year = stringr::str_replace(year, "v1.5", "v1.7")) %>%
-  dplyr::mutate(treecover2000 = paste0(treecover2000_dir, "/", stringr::str_replace(string = basename(year), pattern = "lossyear", replacement = "treecover2000"))) %>%
-  dplyr::rowwise() %>% 
-  dplyr::mutate(area = list(raster::stack(c(area = area))), year = list(raster::stack(c(year = year))),
-		treecover2000 = list(raster::stack(c(treecover2000 = treecover2000)))) %>%
-  dplyr::mutate(geometry = sf::st_as_sfc(sf::st_bbox(area), sf::st_crs(area))) %>%
-  sf::st_as_sf() %>%
-  dplyr::ungroup() %>%
+  dplyr::mutate(extent = list(raster::extent(raster::raster(tile)))) %>% 
+  dplyr::mutate(pixel_area_vrt, forest_loss_vrt, treecover2000_vrt) %>% 
   dplyr::mutate(grid_30sec = list(raster::stack(grid_file_paths))) %>% 
-  dplyr::mutate(out_file = purrr::pmap_chr(.l = list(job_id, id_hansen, area, year, 
-                                                     treecover2000, grid_30sec), 
+  dplyr::mutate(out_file = purrr::pmap_chr(.l = list(job_id, id_hansen, extent, 
+                                                     pixel_area_vrt, forest_loss_vrt, treecover2000_vrt, grid_30sec), 
                                            .f = build_forest_30sec_grid, 
                                            mine_polygons = sf::st_read(mine_polygons, quiet = TRUE), 
                                            country_codes = readr::read_csv(country_codes),

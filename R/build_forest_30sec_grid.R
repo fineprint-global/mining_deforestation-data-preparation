@@ -13,11 +13,13 @@ build_forest_30sec_grid <-
            forest_cover_threshold,
            ncores = 1){
 
-  # job_id <- processing_tiles$job_id[[1]]
-  # id_hansen <- processing_tiles$id_hansen[[1]]
-  # area <- processing_tiles$area[[1]]
-  # year <- processing_tiles$year[[1]]
-  # treecover2000 <- processing_tiles$treecover2000[[1]]
+  # job_id <- processing_tiles$job_id
+  # forest_cover_threshold <- 10
+  # id_hansen <- processing_tiles$id_hansen
+  # pixel_area_vrt <- processing_tiles$pixel_area_vrt
+  # forest_loss_vrt <- processing_tiles$forest_loss_vrt
+  # treecover2000_vrt <- processing_tiles$treecover2000_vrt
+  # tile_extent <- processing_tiles$extent[[1]]
   # grid_30sec <- processing_tiles$grid_30sec[[1]]
   # output_path <- paste0(fineprint_grid_30sec_path, "/test_processing")
   # mine_polygons <- sf::st_read(mine_polygons)
@@ -26,22 +28,43 @@ build_forest_30sec_grid <-
   
   tile_start_time <- Sys.time()
   cat(paste0("\nProcessing forest loss tile ", id_hansen, " using ", ncores," cores"))
-  
+
   # --------------------------------------------------------------------------------------
-  # stack raster files 
-  tile <- raster::stack(c(area = area, year = year, treecover2000 = treecover2000))
-  tile_30sec <- raster::crop(raster::raster(grid_30sec), raster::extent(tile))
-  names(tile) <- c("area", "year", "treecover2000")
+  # stack raster tile layers
+  tile_buffer <- c(-0.004, 0.004, -0.004, 0.004) # ~0.5km buffer to avoid systematic error on tile borders
+  tile_extent_buffer <- tile_extent + tile_buffer
+  
+  tile_dir <- paste0(output_path, "/", id_hansen)
+  dir.create(tile_dir, showWarnings = FALSE, recursive = TRUE)
+  
+  tile_area_vrt <- paste0(tile_dir, "/pixel_area.vrt")
+  gdalUtils::gdalbuildvrt(gdalfile = pixel_area_vrt, 
+                                  te = tile_extent_buffer[c(1,3,2,4)], 
+                                  output.vrt = tile_area_vrt)
+  
+  tile_yearloss_vrt <- paste0(tile_dir, "/yearloss.vrt")
+  gdalUtils::gdalbuildvrt(gdalfile = forest_loss_vrt, 
+                          te = tile_extent_buffer[c(1,3,2,4)], 
+                          output.vrt = tile_yearloss_vrt)
+  
+  tile_treecover2000_vrt <- paste0(tile_dir, "/treecover2000.vrt")
+  gdalUtils::gdalbuildvrt(gdalfile = treecover2000_vrt, 
+                          te = tile_extent_buffer[c(1,3,2,4)], 
+                          output.vrt = tile_treecover2000_vrt)
+  
+  tile <- raster::stack(c(area = tile_area_vrt, 
+                          year = tile_yearloss_vrt, 
+                          treecover2000 = tile_treecover2000_vrt))
+  
+  tile_30sec <- raster::crop(grid_30sec, tile_extent)
   
   # --------------------------------------------------------------------------------------
   # Split processing blocks
   # r_blocks <- raster::blockSize(tile, minblocks = 800)
-  r_blocks <- raster::blockSize(tile, minrows = 160)
+  r_blocks <- raster::blockSize(tile_30sec, minrows = 5, minblocks = nrow(tile_30sec)/5)
   
   # --------------------------------------------------------------------------------------
   # start files to write raster grid output 
-  tile_dir <- paste0(output_path, "/", id_hansen)
-  dir.create(tile_dir, showWarnings = FALSE, recursive = TRUE)
   r_forest_area <- raster::writeStart(raster::raster(tile_30sec), filename = paste0(tile_dir, "/forest_area_2000.tif"), overwrite = TRUE)
   r_forest_area_loss_2010 <- raster::writeStart(raster::raster(tile_30sec), filename = paste0(tile_dir, "/forest_area_loss_2010.tif"), overwrite = TRUE)
   r_forest_area_loss_2019 <- raster::writeStart(raster::raster(tile_30sec), filename = paste0(tile_dir, "/forest_area_loss_2019.tif"), overwrite = TRUE)
@@ -67,7 +90,7 @@ build_forest_30sec_grid <-
     
     # --------------------------------------------------------------------------------------
     # Get sub tile extent 
-    sub_tile_extent <- raster::extent(tile, r_blocks$row[b], r_blocks$row[b] + r_blocks$nrows[b] - 1, 1, ncol(tile)) 
+    sub_tile_extent <- raster::extent(tile_30sec, r_blocks$row[b], r_blocks$row[b] + r_blocks$nrows[b] - 1, 1, ncol(tile_30sec)) 
     
     # --------------------------------------------------------------------------------------
     # project raster to equal-area 
@@ -106,7 +129,7 @@ build_forest_30sec_grid <-
     }
     
     forest_stars <- raster::subset(tile, c("year", "area", "treecover2000")) %>% 
-      raster::crop(sub_tile_extent + c(-0.004, 0.004, -0.004, 0.004)) %>% # ~0.5km buffer  
+      raster::crop(sub_tile_extent + tile_buffer) %>%   
       stars::st_as_stars() %>% 
       stars::st_apply(MARGIN = 1:2, FUN = forest_cover_area)
     
