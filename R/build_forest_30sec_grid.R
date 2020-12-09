@@ -110,9 +110,14 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000
     }
     
     forest_stars <- raster::subset(tile, c("year", "area", "treecover2000")) %>% 
-      raster::crop(sub_tile_extent) %>% 
+      raster::crop(sub_tile_extent + c(-0.004, 0.004, -0.004, 0.004)) %>% # ~0.5km buffer  
       stars::st_as_stars() %>% 
       stars::st_apply(MARGIN = 1:2, FUN = fun_forest_area)
+    
+    # a <- forest_stars %>%
+    #   slice("fun_forest_area", 1) 
+    # sum(a$year, na.rm = T)
+    #   plot()
     
     # sub_tile_tbl %>% 
     #   sf::st_drop_geometry() %>% 
@@ -129,12 +134,19 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000
     # aggregate forest area in 2000 to 30sec grid 
     # forest_2000_df <- forest_2000_velox$extract(sp = sub_tile_tbl, df = TRUE)
     
-    # calculate exact area 
+    # brazil <- cbind(brazil, exact_extract(prec, brazil, c('min', 'max')))
+      
+      
+    # forest_stars %>% 
+    #   dplyr::slice("fun_forest_area", y) %>% 
+    #   as("Raster") %>% 
+    #   plot()
+        
     loss_tbl <- lapply(1:20, function(y){
       forest_stars %>% 
         dplyr::slice("fun_forest_area", y) %>% 
         as("Raster") %>% 
-        exactextractr::exact_extract(y = sub_tile_tbl, fun = 'sum', progress = FALSE)
+        exactextractr::exact_extract(y = sub_tile_tbl, fun = 'sum', include_cell = FALSE, progress = FALSE)
     })
     names(loss_tbl) <- c("treecover2000", stringr::str_glue("Y{1:19}"))
     
@@ -142,7 +154,7 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000
       sf::st_drop_geometry() %>% 
       tibble::as_tibble() %>% 
       dplyr::select(id) %>% 
-      dplyr::bind_cols(loss_tbl) 
+      dplyr::bind_cols(loss_tbl)
     
     # sub_tile_tbl %>% 
     #   sf::st_drop_geometry() %>% 
