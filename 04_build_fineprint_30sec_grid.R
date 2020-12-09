@@ -29,7 +29,7 @@ forest_cover_threshold <- 10 # percentage
 fineprint_grid_30sec_path <- path.expand(paste0(data_path, "/fineprint_grid_30sec"))
 dir.create(fineprint_grid_30sec_path, showWarnings = FALSE, recursive = TRUE)
 #output_path <- paste0(fineprint_grid_30sec_path, "/timeseries", format(Sys.time(), "_%Y%m%d%H%M%S"))
-output_path <- paste0(fineprint_grid_30sec_path, "/grid_", "_20201209_1")
+output_path <- paste0(fineprint_grid_30sec_path, "/grid_20201209_1")
 dir.create(output_path, showWarnings = FALSE, recursive = TRUE)
 
 # --------------------------------------------------------------------------------------
@@ -80,10 +80,10 @@ processing_tiles <- dir(pixel_area_dir, pattern = ".tif$", full.name = TRUE) %>%
   dplyr::transmute(job_id = dplyr::row_number(), id_hansen = stringr::str_match(tile, "/Hansen_GFC-2017-v1.5_lossyear_(.*?).tif")[,2], tile = tile) %>% 
   dplyr::mutate(id_hansen = stringr::str_remove_all(id_hansen, "_")) %>%
   dplyr::filter(job_id %in% unlist(ifelse(exists("cluster_job_id"), cluster_job_id, list(job_id)))) %>%
-  dplyr::mutate(extent = list(raster::extent(raster::raster(tile)))) %>% 
+  dplyr::mutate(tile_extent = list(raster::extent(raster::raster(tile)))) %>% 
   dplyr::mutate(pixel_area_vrt, forest_loss_vrt, treecover2000_vrt) %>% 
   dplyr::mutate(grid_30sec = list(raster::stack(grid_file_paths))) %>% 
-  dplyr::mutate(out_file = purrr::pmap_chr(.l = list(job_id, id_hansen, extent, 
+  dplyr::mutate(out_file = purrr::pmap_chr(.l = list(job_id, id_hansen, tile_extent, 
                                                      pixel_area_vrt, forest_loss_vrt, treecover2000_vrt, grid_30sec), 
                                            .f = build_forest_30sec_grid, 
                                            mine_polygons = sf::st_read(mine_polygons, quiet = TRUE), 

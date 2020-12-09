@@ -1,9 +1,10 @@
 build_forest_30sec_grid <- 
   function(job_id, 
            id_hansen, 
-           area, 
-           year, 
-           treecover2000, 
+           tile_extent, 
+           pixel_area_vrt, 
+           forest_loss_vrt, 
+           treecover2000_vrt, 
            grid_30sec, 
            mine_polygons, 
            country_codes, 
