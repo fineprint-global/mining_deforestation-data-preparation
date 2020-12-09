@@ -1,4 +1,17 @@
-build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000, grid_30sec, mine_polygons, country_codes, log_file = NULL, grid_path, output_path, ncores = 1){
+build_forest_30sec_grid <- 
+  function(job_id, 
+           id_hansen, 
+           area, 
+           year, 
+           treecover2000, 
+           grid_30sec, 
+           mine_polygons, 
+           country_codes, 
+           log_file = NULL, 
+           grid_path, 
+           output_path, 
+           forest_cover_threshold,
+           ncores = 1){
 
   # job_id <- processing_tiles$job_id[[1]]
   # id_hansen <- processing_tiles$id_hansen[[1]]
@@ -12,7 +25,8 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000
   # ncores <- 1
   
   tile_start_time <- Sys.time()
-
+  cat(paste0("\nProcessing forest loss tile ", id_hansen, " using ", ncores," cores"))
+  
   # --------------------------------------------------------------------------------------
   # stack raster files 
   tile <- raster::stack(c(area = area, year = year, treecover2000 = treecover2000))
@@ -23,13 +37,6 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000
   # Split processing blocks
   # r_blocks <- raster::blockSize(tile, minblocks = 800)
   r_blocks <- raster::blockSize(tile, minrows = 160)
-  #output_path <- paste0(output_path, "/timeseries", format(Sys.time(), "_%Y%m%d%H%M%S"))
-  #dir.create(output_path, showWarnings = FALSE, recursive = TRUE)
-  
-  # --------------------------------------------------------------------------------------
-  # Parallel processing 
-  # cat(paste0("\nProcessing forest loss tile ", id_hansen, " using ", ncores," cores"), file = log_file, append = TRUE)
-  cat(paste0("\nProcessing forest loss tile ", id_hansen, " using ", ncores," cores"))
   
   # --------------------------------------------------------------------------------------
   # start files to write raster grid output 
@@ -58,15 +65,9 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000
     fname_grid_sf <- paste0(tile_dir, "/", stringr::str_pad(string = b, width = 4, pad = "0"), "_grid.geojson")
     fname_forest_ts <- paste0(tile_dir, "/", stringr::str_pad(string = b, width = 4, pad = "0"), "_timeseries.csv")
     
-    #if(file.exists(fname_grid_sf) && file.exists(fname_forest_ts)){
-    #  return(TRUE)
-    #}
-    
     # --------------------------------------------------------------------------------------
     # Get sub tile extent 
     sub_tile_extent <- raster::extent(tile, r_blocks$row[b], r_blocks$row[b] + r_blocks$nrows[b] - 1, 1, ncol(tile)) 
-    # test_set <- mine_polygons %>% dplyr::filter(ECO_NAME == "Xingu-Tocantins-Araguaia moist forests") 
-    # sub_tile_extent <- st_bbox(test_set) %>% as.vector() %>% raster::extent()
     
     # --------------------------------------------------------------------------------------
     # project raster to equal-area 
@@ -94,15 +95,10 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000
     }
     
     # --------------------------------------------------------------------------------------
-    # redimention stack: year attr to dim 
-    # forest_2000_velox <- raster::subset(tile, c("area", "treecover2000")) %>% 
-    #   raster::crop(sub_tile_extent) %>% 
-    #   stars::st_as_stars()
-      # velox::velox()
-
-    fun_forest_area <- function(x){
+    # redimension stack: year attr to dimension
+    forest_cover_area <- function(x){
       # 10% forest cover 2000 threshold - https://developers.google.com/earth-engine/tutorials/community/forest-cover-loss-estimation
-      res <- c(ifelse(x[3] >= 10, x[2], 0), rep(NA, 19))
+      res <- c(ifelse(x[3] >= forest_cover_threshold, x[2], 0), rep(NA, 19))
       if( x[1] == 0 ) return(res)
       # get forest loss area
       res[x[1] + 1] <- x[2]
@@ -112,39 +108,13 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000
     forest_stars <- raster::subset(tile, c("year", "area", "treecover2000")) %>% 
       raster::crop(sub_tile_extent + c(-0.004, 0.004, -0.004, 0.004)) %>% # ~0.5km buffer  
       stars::st_as_stars() %>% 
-      stars::st_apply(MARGIN = 1:2, FUN = fun_forest_area)
-    
-    # a <- forest_stars %>%
-    #   slice("fun_forest_area", 1) 
-    # sum(a$year, na.rm = T)
-    #   plot()
-    
-    # sub_tile_tbl %>% 
-    #   sf::st_drop_geometry() %>% 
-    #   tibble::as_tibble() %>% 
-    #   dplyr::select(id) %>% 
-    #   dplyr::bind_cols(loss_tbl) %>% 
-    #   tidyr::pivot_longer(cols = num_range(prefix = "Y", range = 2001:2019), names_to = "year", values_to = "area") %>% 
-    #   dplyr::mutate(year = as.numeric(stringr::str_remove(year, "Y")))
-    
-    # velox_tile <- raster::crop(tile, sub_tile_extent) %>% 
-    #   velox::velox()
+      stars::st_apply(MARGIN = 1:2, FUN = forest_cover_area)
     
     # --------------------------------------------------------------------------------------
-    # aggregate forest area in 2000 to 30sec grid 
-    # forest_2000_df <- forest_2000_velox$extract(sp = sub_tile_tbl, df = TRUE)
-    
-    # brazil <- cbind(brazil, exact_extract(prec, brazil, c('min', 'max')))
-      
-      
-    # forest_stars %>% 
-    #   dplyr::slice("fun_forest_area", y) %>% 
-    #   as("Raster") %>% 
-    #   plot()
-        
+    # aggregate forest cover and cover loss area to 30sec grid 
     loss_tbl <- lapply(1:20, function(y){
       forest_stars %>% 
-        dplyr::slice("fun_forest_area", y) %>% 
+        dplyr::slice("forest_cover_area", y) %>% 
         as("Raster") %>% 
         exactextractr::exact_extract(y = sub_tile_tbl, fun = 'sum', include_cell = FALSE, progress = FALSE)
     })
@@ -155,14 +125,6 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000
       tibble::as_tibble() %>% 
       dplyr::select(id) %>% 
       dplyr::bind_cols(loss_tbl)
-    
-    # sub_tile_tbl %>% 
-    #   sf::st_drop_geometry() %>% 
-    #   tibble::as_tibble() %>% 
-    #   dplyr::select(id) %>% 
-    #   dplyr::bind_cols(loss_tbl) %>% 
-    #   tidyr::pivot_longer(cols = num_range(prefix = "Y", range = 2001:2019), names_to = "year", values_to = "area") %>% 
-    #   dplyr::mutate(year = as.numeric(stringr::str_remove(year, "Y")))
     
     forest_2000 <- 
       tibble::tibble(id = integer(), area_2000 = double()) 
@@ -236,11 +198,9 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000
         sf::st_transform(crs = "+proj=longlat")
 
       # calculate forest loss time series from direct mining within grid cells 
-      # mine_forest_2000 <- forest_2000_velox$extract(sp = sf::st_transform(mine_grid_intersection, crs = "+proj=longlat"), df = TRUE) 
-      
       loss_tbl <- lapply(1:20, function(y){
         forest_stars %>% 
-          dplyr::slice("fun_forest_area", y) %>% 
+          dplyr::slice("forest_cover_area", y) %>% 
           as("Raster") %>% 
           exactextractr::exact_extract(y = mine_grid_intersection, fun = 'sum', progress = FALSE)
       })
@@ -298,11 +258,9 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000
             dplyr::select(id_grid, year, area_forest_loss_mine_lease = area_loss, area_forest_mine_lease = area_forest)
 	  
 	  out_forest_timeseries %>%
-            dplyr::left_join(tibble::as_tibble(sub_tile_tbl) %>% dplyr::select(id_grid, RASTER_VALUE = countries), by = c("id_grid" = "id_grid")) %>% 
-            dplyr::left_join(country_codes, by = c("RASTER_VALUE" = "RASTER_VALUE")) %>%
+	    dplyr::left_join(tibble::as_tibble(sub_tile_tbl) %>% dplyr::select(id_grid, RASTER_VALUE = countries), by = c("id_grid" = "id_grid")) %>% 
+	    dplyr::left_join(country_codes, by = c("RASTER_VALUE" = "RASTER_VALUE")) %>%
 	    readr::write_csv(fname_forest_ts)
-          #  dplyr::left_join(tibble::as_tibble(sub_tile_tbl) %>% dplyr::select(id, countries), by = c("id" = "id")) %>% 
-          #  readr::write_csv(path = fname_forest_ts)
 
         } 
       }
@@ -338,15 +296,9 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000
       tidyr::spread(year, area_forest_loss_mine_lease) %>% 
       dplyr::select(-id_grid) %>% 
       as.matrix()
-      #  dplyr::select(-id, id_grid, area_loss, countries) %>% 
-      #  dplyr::left_join(mine_forest_loss_time_series, by = c("id_grid" = "id_grid", "year" = "year")) %>% 
-      #  tidyr::replace_na(list(area_forest_mine_lease = 0, accumulated_loss_mine_lease = 0)) %>%
-      #  dplyr::group_by(countries, year) %>%
-      #  dplyr::summarise(area_forest_mine_lease = sum(area_forest_mine_lease, na.rm = TRUE), accumulated_loss_mine_lease = sum(accumulated_loss_mine_leas, na.rm = TRUE), .groups = 'drop')
 
     # --------------------------------------------------------------------------------------
     # write results to file 
-    #readr::write_csv(out_forest_timeseries, path = fname_forest_ts)
     out_sub_tile_tbl %>% 
       dplyr::select(-id) %>% 
       sf::st_write(dsn = fname_grid_sf, factorsAsCharacter = TRUE, delete_dsn = TRUE, quiet = TRUE)
@@ -380,11 +332,8 @@ build_forest_30sec_grid <- function(job_id, id_hansen, area, year, treecover2000
     r_mine_lease_forest_2000 <- raster::writeValues(r_mine_lease_forest_2000, r_out$area_forest_2000_mine_lease, start = row_start)
     r_mine_lease_forest_loss_2010 <- raster::writeValues(r_mine_lease_forest_loss_2010, r_out$area_accumulated_loss_mine_lease_2010, start = row_start)
     r_mine_lease_forest_loss_2019 <- raster::writeValues(r_mine_lease_forest_loss_2019, r_out$area_accumulated_loss_mine_lease_2019, start = row_start)
-    #mine_forest_loss_time_series_mat <- mine_forest_loss_time_series
-    #dplyr::select(df, -forest) %>% tidyr::spread(year, loss) %>% dplyr::select(-id) %>% as.atrix()
     r_mine_lease_forest_loss_timeseries <- raster::writeValues(r_mine_lease_forest_loss_timeseries, out_forest_timeseries, start = row_start)
 
-    # cat(paste0("\nTile ", id_hansen, " done! ", capture.output(Sys.time() - start_time)), file = log_file, append = TRUE)
     cat(paste0("\nTile ", id_hansen, " subtile ", b, " done! ", capture.output(Sys.time() - start_time)))
     
     return(TRUE)

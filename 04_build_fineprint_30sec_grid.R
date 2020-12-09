@@ -19,6 +19,12 @@ if(!exists("data_path"))
   data_path <- "/mnt/nfs_fineprint/data/geoserver"
 
 # --------------------------------------------------------------------------------------
+# Forest cover threshold
+# 10% forest cover 2000 threshold - https://developers.google.com/earth-engine/tutorials/community/forest-cover-loss-estimation
+# 25% forest cover 2000 threshold - https://www.pnas.org/content/107/19/8650
+forest_cover_threshold <- 10 # percentage 
+
+# --------------------------------------------------------------------------------------
 # set output file 
 fineprint_grid_30sec_path <- path.expand(paste0(data_path, "/fineprint_grid_30sec"))
 dir.create(fineprint_grid_30sec_path, showWarnings = FALSE, recursive = TRUE)
@@ -90,8 +96,9 @@ processing_tiles <- dir(pixel_area_dir, pattern = ".tif$", full.name = TRUE) %>%
                                            .f = build_forest_30sec_grid, 
                                            mine_polygons = sf::st_read(mine_polygons, quiet = TRUE), 
                                            country_codes = readr::read_csv(country_codes),
-					   grid_path = fineprint_grid_30sec_path, 
-					   output_path = output_path, 
+                                           grid_path = fineprint_grid_30sec_path, 
+                                           output_path = output_path, 
+                                           forest_cover_threshold = forest_cover_threshold,
                                            ncores = 1)) 
 
 
