@@ -13,6 +13,7 @@ R --vanilla <<-EOF
 
   project_path <- Sys.getenv("SGE_O_WORKDIR")
   data_path <- "/gpfs/home/home/vmaus/data/geoserver"
+  grid_version <- "grid_20201216_30"
   setwd(project_path)
 
   # Get job id

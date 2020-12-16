@@ -11,8 +11,6 @@ source("./R/build_forest_30sec_grid.R")
 raster::rasterOptions(tmpdir = "./raster_tmp/")
 raster::rasterOptions(format = "GTiff")
 
-
-
 # --------------------------------------------------------------------------------------
 # set path to data sets 
 if(!exists("data_path"))
@@ -22,14 +20,16 @@ if(!exists("data_path"))
 # Forest cover threshold
 # 10% forest cover 2000 threshold - https://developers.google.com/earth-engine/tutorials/community/forest-cover-loss-estimation
 # 25% forest cover 2000 threshold - https://www.pnas.org/content/107/19/8650
-forest_cover_threshold <- 10 # percentage 
+# 30% Global Forest Watch
+forest_cover_threshold <- 30 # percentage
 
 # --------------------------------------------------------------------------------------
 # set output file 
 fineprint_grid_30sec_path <- path.expand(paste0(data_path, "/fineprint_grid_30sec"))
 dir.create(fineprint_grid_30sec_path, showWarnings = FALSE, recursive = TRUE)
-#output_path <- paste0(fineprint_grid_30sec_path, "/timeseries", format(Sys.time(), "_%Y%m%d%H%M%S"))
-output_path <- paste0(fineprint_grid_30sec_path, "/grid_20201209_1")
+if(!exists("grid_version"))
+  grid_version <- paste0("grid_", format(Sys.time(), "_%Y%m%_"), forest_cover_threshold)
+output_path <- paste0(fineprint_grid_30sec_path, "/", grid_version)
 dir.create(output_path, showWarnings = FALSE, recursive = TRUE)
 
 # --------------------------------------------------------------------------------------

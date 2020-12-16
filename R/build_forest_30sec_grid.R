@@ -42,8 +42,8 @@ build_forest_30sec_grid <-
   gdalUtils::gdalbuildvrt(gdalfile = pixel_area_vrt, 
                                   te = tile_extent_buffer[c(1,3,2,4)], 
                                   output.vrt = tile_area_vrt)
-  
-  tile_yearloss_vrt <- paste0(tile_dir, "/yearloss.vrt")
+
+  tile_yearloss_vrt <- paste0(tile_dir, "/yearloss.vrt") 
   gdalUtils::gdalbuildvrt(gdalfile = forest_loss_vrt, 
                           te = tile_extent_buffer[c(1,3,2,4)], 
                           output.vrt = tile_yearloss_vrt)
@@ -121,11 +121,10 @@ build_forest_30sec_grid <-
     # --------------------------------------------------------------------------------------
     # redimension stack: year attr to dimension
     forest_cover_area <- function(x){
-      # 10% forest cover 2000 threshold - https://developers.google.com/earth-engine/tutorials/community/forest-cover-loss-estimation
-      res <- c(ifelse(x[3] >= forest_cover_threshold, x[2], 0), rep(NA, 19))
+      init_cover <- ifelse(is.na(x[3]), 0, ifelse(x[3] >= forest_cover_threshold, 1, 0))
+      res <- c(init_cover * x[2], rep(NA, 19))
       if( x[1] == 0 ) return(res)
-      # get forest loss area
-      res[x[1] + 1] <- x[2]
+      res[x[1] + 1] <- res[1]
       return(res)
     }
     
