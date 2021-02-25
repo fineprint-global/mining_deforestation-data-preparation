@@ -1,4 +1,4 @@
-#$ -N forestloss -t 1:327
+#$ -N forestloss -t 1:505
 #$ -M victor.maus@wu.ac.at
 #$ -m e
 #$ -q node.q
@@ -8,12 +8,12 @@
 conda activate geor
 
 # call R
-# n jobs 1:327
+# n jobs 1:505
 R --vanilla <<-EOF
 
   project_path <- Sys.getenv("SGE_O_WORKDIR")
   data_path <- "/gpfs/home/home/vmaus/data/geoserver"
-  grid_version <- "grid_20201216_30"
+  grid_version <- "grid_20210222_30"
   setwd(project_path)
 
   # Get job id

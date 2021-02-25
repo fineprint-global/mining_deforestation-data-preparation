@@ -10,7 +10,7 @@ data_path <- "/gpfs/home/home/vmaus/data/geoserver"
 
 # --------------------------------------------------------------------------------------
 # get path dir data sets 
-pixel_area_dir <- path.expand(paste0(data_path, "/hansen/pixel_area"))
+pixel_area_dir <- path.expand(paste0(data_path, "/hansen/pixel_area_new"))
 forest_loss_dir <- path.expand(paste0(data_path, "/hansen/v1.7/lossyear"))
 treecover2000_dir <- path.expand(paste0(data_path, "/hansen/v1.7/treecover2000"))
 

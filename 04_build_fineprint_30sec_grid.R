@@ -69,7 +69,7 @@ grid_file_paths <-
 
 # --------------------------------------------------------------------------------------
 # get path dir data sets 
-pixel_area_vrt <- path.expand(paste0(data_path, "/hansen/pixel_area/area.vrt"))
+pixel_area_vrt <- path.expand(paste0(data_path, "/hansen/pixel_area_new/area.vrt"))
 forest_loss_vrt <- path.expand(paste0(data_path, "/hansen/v1.7/lossyear/lossyear.vrt"))
 treecover2000_vrt <- path.expand(paste0(data_path, "/hansen/v1.7/treecover2000/treecover2000.vrt"))
 

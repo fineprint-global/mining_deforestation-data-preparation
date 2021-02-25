@@ -1,0 +1,60 @@
+#$ -N pa -t 1:504
+#$ -M victor.maus@wu.ac.at
+#$ -m e
+#$ -q node.q
+#$ -wd /gpfs/home/home/vmaus/workspace/mining_deforestation
+
+# set conda geo R env
+conda activate geor
+
+# call R
+# n jobs 1:327
+R --vanilla <<-EOF
+
+  library(raster)
+  library(tidyverse)
+  library(sf)
+  library(rnaturalearth)
+
+  project_path <- Sys.getenv("SGE_O_WORKDIR")
+  data_path <- "/gpfs/home/home/vmaus/data/geoserver/hansen"
+  setwd(project_path)
+
+  # Get job id
+  # Each job process one tile from hansen forest loss data set
+  JOB_ID <- as.integer(Sys.getenv("SGE_TASK_ID"))
+  print(JOB_ID)
+
+  # Run job 
+  world_land <- rnaturalearth::ne_countries(scale = "small", returnclass = "sf")
+
+  in_tile <- dir(stringr::str_glue("{data_path}/v1.7/lossyear"), pattern = ".tif$", full.names = TRUE)[JOB_ID]
+
+  tile_id <- stringr::str_match(in_tile, "lossyear_(.*?).tif")[,2]
+
+  out_tile <- stringr::str_glue("{data_path}/pixel_area_new/Hansen_GFC-2017-v1.5_lossyear_{tile_id}.tif")
+  
+  dir.create(path = dirname(out_tile), showWarnings = FALSE, recursive = TRUE)
+
+  print(tile_id)
+
+  r <- raster::raster(in_tile)
+  
+  r_bbox <- raster::bbox(r)
+
+  tile <- sf::st_bbox(c(xmin = r_bbox[1], xmax = r_bbox[3], ymax = r_bbox[2], ymin = r_bbox[4]), crs = sf::st_crs(4326)) %>% 
+    sf::st_as_sfc()
+
+  if(length(sf::st_intersects(tile, world_land)) < 1){
+    print("Skipping: Tile over seas")
+  } else {
+    print("Calculating pixel area")
+    raster::writeRaster(raster::area(r), 
+                overwrite = TRUE, 
+                filename = out_tile)
+  }
+
+  print("Done!")
+
+EOF
+
