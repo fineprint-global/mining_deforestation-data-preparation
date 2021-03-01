@@ -1,8 +1,7 @@
 #$ -N forestloss -t 1:505
-#$ -M victor.maus@wu.ac.at
 #$ -m e
 #$ -q node.q
-#$ -wd /gpfs/home/home/vmaus/workspace/mining_deforestation
+#$ -wd $HOME/workspace/mining_deforestation
 
 # set conda geo R env
 conda activate geor
@@ -12,7 +11,7 @@ conda activate geor
 R --vanilla <<-EOF
 
   project_path <- Sys.getenv("SGE_O_WORKDIR")
-  data_path <- "/gpfs/home/home/vmaus/data/geoserver"
+  data_path <- paste0(Sys.getenv("HOME"),"/data/geoserver/hansen"
   grid_version <- "grid_20210222_30"
   setwd(project_path)
 
@@ -21,7 +20,7 @@ R --vanilla <<-EOF
   cluster_job_id <- as.integer(Sys.getenv("SGE_TASK_ID"))
   print(cluster_job_id)
 
-  # Run job 
+  # Run job
   source("./04_build_fineprint_30sec_grid.R")
 
 EOF
